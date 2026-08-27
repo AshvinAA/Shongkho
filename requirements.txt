@@ -1,3 +1,9 @@
-fastapi 
+fastapi
+uvicorn[standard]
+sqlalchemy
+pymysql
+cryptography
+python-dotenv
 pydantic
-jinja2
+passlib[bcrypt]
+PyJWT
