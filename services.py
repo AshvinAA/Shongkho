@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from passlib.context import CryptContext
-
+from sqlalchemy import or_
 import models
 import schemas
 
@@ -35,6 +35,17 @@ def create_employee(db: Session, employee: schemas.EmployeeCreate):
     db.refresh(db_employee)
     return db_employee
 
+
+    
+def search_employees(db: Session, search_term: str):
+    # This will find employees where the search term matches part of their name OR phone number
+    return db.query(models.Employee).filter(
+        or_(
+            models.Employee.name.contains(search_term),
+            models.Employee.phone_number.contains(search_term)
+        )
+    ).all()
+
 # ---------------------------------------------------------
 # PRODUCT SERVICES
 # ---------------------------------------------------------
@@ -53,6 +64,17 @@ def create_product(db: Session, product: schemas.ProductCreate):
 
 def get_products(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Product).offset(skip).limit(limit).all()
+
+
+def search_products(db: Session, search_term: str):
+    # This will find products where the search term matches part of their name OR category
+    return db.query(models.Product).filter(
+        or_(
+            models.Product.product_name.contains(search_term),
+            models.Product.category.contains(search_term)
+        )
+    ).all()
+
 
 # ---------------------------------------------------------
 # CUSTOMER SERVICES
