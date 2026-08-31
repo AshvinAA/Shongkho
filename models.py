@@ -61,15 +61,18 @@ class Employee(User):
 # ---------------------------------------------------------
 # 2. CORE ENTITIES (Customer & Product)
 # ---------------------------------------------------------
+
+
 class Customer(Base):
     __tablename__ = 'customers'
     
     customer_id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    phone_number = Column(String(50))
-
+    # 1. Added unique=True and index=True
+    phone_number = Column(String(50), unique=True, index=True, nullable=False)
+    
+    # 2. Added relationship to fetch full purchase history
     sales = relationship("Sale", back_populates="customer")
-
 
 class Product(Base):
     __tablename__ = 'products'
@@ -92,15 +95,18 @@ class Product(Base):
 # ---------------------------------------------------------
 # 3. TRANSACTION ENTITIES (Sale & SaleItem Bridge)
 # ---------------------------------------------------------
+
+
+
 class Sale(Base):
     __tablename__ = 'sales'
     
     transaction_id = Column(Integer, primary_key=True, index=True)
     date = Column(Date, default=date.today)
     time = Column(Time, default=lambda: datetime.now().time())
-    payment_method = Column(String(50))
+    payment_method = Column(String(50), nullable=False)
     total_revenue = Column(Float, default=0.0)
-    total_profit = Column(Float, default=0.0) # NEW: Store the calculated profit
+    total_profit = Column(Float, default=0.0)
     
     # Foreign Keys
     employee_id = Column(Integer, ForeignKey('employees.user_id'))

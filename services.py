@@ -79,8 +79,17 @@ def search_products(db: Session, search_term: str):
 # ---------------------------------------------------------
 # CUSTOMER SERVICES
 # ---------------------------------------------------------
+
 def create_customer(db: Session, customer: schemas.CustomerCreate):
-    # Manually mapping each field instead of using model_dump()
+    # Check if a customer with this phone number already exists
+    existing_customer = get_customer_by_phone(db, customer.phone_number)
+    if existing_customer:
+        # If they exist, raise an error to prevent a database crash
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Phone number {customer.phone_number} is already registered to {existing_customer.name}"
+        )
+
     db_customer = models.Customer(
         name=customer.name,
         phone_number=customer.phone_number
@@ -92,6 +101,21 @@ def create_customer(db: Session, customer: schemas.CustomerCreate):
 
 def get_customers(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Customer).offset(skip).limit(limit).all()
+
+# NEW: Find a single customer by exact phone number
+def get_customer_by_phone(db: Session, phone_number: str):
+    return db.query(models.Customer).filter(models.Customer.phone_number == phone_number).first()
+
+# NEW: Update an existing customer's name
+def update_customer_name(db: Session, customer_id: int, new_name: str):
+    customer = db.query(models.Customer).filter(models.Customer.customer_id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+        
+    customer.name = new_name
+    db.commit()
+    db.refresh(customer)
+    return customer
 
 # ---------------------------------------------------------
 # CHECKOUT / SALE LOGIC (The most important part)
