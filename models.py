@@ -76,12 +76,18 @@ class Product(Base):
     
     product_id = Column(Integer, primary_key=True, index=True)
     product_name = Column(String(255), nullable=False)
-    current_price = Column(Float, nullable=False)
+    
+    # Split into Cost and Retail
+    cost_price = Column(Float, nullable=False)   # What YOU pay
+    retail_price = Column(Float, nullable=False) # What the CUSTOMER pays
+    
     category = Column(String(100))
     supplier_name = Column(String(255))
     date = Column(Date, default=date.today)
 
     sale_items = relationship("SaleItem", back_populates="product")
+
+
 
 # ---------------------------------------------------------
 # 3. TRANSACTION ENTITIES (Sale & SaleItem Bridge)
@@ -94,6 +100,7 @@ class Sale(Base):
     time = Column(Time, default=lambda: datetime.now().time())
     payment_method = Column(String(50))
     total_revenue = Column(Float, default=0.0)
+    total_profit = Column(Float, default=0.0) # NEW: Store the calculated profit
     
     # Foreign Keys
     employee_id = Column(Integer, ForeignKey('employees.user_id'))
@@ -103,6 +110,7 @@ class Sale(Base):
     employee = relationship("Employee", back_populates="sales")
     customer = relationship("Customer", back_populates="sales")
     items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
+    
 
 
 class SaleItem(Base):
@@ -113,7 +121,10 @@ class SaleItem(Base):
     product_id = Column(Integer, ForeignKey('products.product_id'), primary_key=True)
     
     quantity = Column(Integer, nullable=False)
-    unit_price_at_sale = Column(Float, nullable=False)  # Preserves historical sale price
+    retail_price_at_sale = Column(Float, nullable=False) # Lock in customer price
+    cost_price_at_sale = Column(Float, nullable=False)   # Lock in supplier cost
 
     sale = relationship("Sale", back_populates="items")
     product = relationship("Product", back_populates="sale_items")
+    
+

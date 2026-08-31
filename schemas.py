@@ -5,11 +5,14 @@ from datetime import date, time
 # ---------------------------------------------------------
 # 1. PRODUCT SCHEMAS
 # ---------------------------------------------------------
+
 class ProductBase(BaseModel):
     product_name: str
-    current_price: float
+    cost_price: float     # Added
+    retail_price: float   # Added
     category: Optional[str] = None
     supplier_name: Optional[str] = None
+
 
 class ProductCreate(ProductBase):
     pass  # Used when creating a new product from the frontend
@@ -68,11 +71,16 @@ class SaleItemCreate(BaseModel):
     # We do NOT ask the frontend for the price to prevent hacking.
     # We will fetch the secure price from the DB in our business logic!
 
+
+
 class SaleItemResponse(BaseModel):
     product_id: int
     quantity: int
-    unit_price_at_sale: float
+    retail_price_at_sale: float
+    cost_price_at_sale: float
     model_config = ConfigDict(from_attributes=True)
+
+
 
 class SaleCreate(BaseModel):
     employee_id: int
@@ -86,9 +94,13 @@ class SaleResponse(BaseModel):
     time: time
     payment_method: str
     total_revenue: float
+    total_profit: float
     employee_id: int
     customer_id: int
     items: List[SaleItemResponse]
     
     model_config = ConfigDict(from_attributes=True)
+
+
+
 

@@ -96,43 +96,47 @@ def get_customers(db: Session, skip: int = 0, limit: int = 100):
 # ---------------------------------------------------------
 # CHECKOUT / SALE LOGIC (The most important part)
 # ---------------------------------------------------------
+
 def create_sale(db: Session, sale_data: schemas.SaleCreate):
-    # 1. Create the empty Sale record first
     db_sale = models.Sale(
         employee_id=sale_data.employee_id,
         customer_id=sale_data.customer_id,
         payment_method=sale_data.payment_method,
-        total_revenue=0.0  # We will calculate this securely right now
+        total_revenue=0.0,
+        total_profit=0.0  # Initialize profit
     )
     
-    # 2. Process each item in the cart
     total_calculated_revenue = 0.0
+    total_calculated_profit = 0.0
     
     for item in sale_data.items:
-        # Fetch the product from the database to get its SECURE current price
         product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
         
         if not product:
             raise HTTPException(status_code=404, detail=f"Product ID {item.product_id} not found")
             
-        # Calculate revenue for this specific item
-        line_total = product.current_price * item.quantity
-        total_calculated_revenue += line_total
+        # 1. Calculate Revenue (Retail)
+        line_revenue = product.retail_price * item.quantity
+        total_calculated_revenue += line_revenue
         
-        # Create the SaleItem bridge record
+        # 2. Calculate Profit (Retail - Cost)
+        line_profit = (product.retail_price - product.cost_price) * item.quantity
+        total_calculated_profit += line_profit
+        
+        # 3. Create the SaleItem bridge record
         sale_item = models.SaleItem(
             product_id=product.product_id,
             quantity=item.quantity,
-            unit_price_at_sale=product.current_price # Locks in the price for historical records
+            retail_price_at_sale=product.retail_price,
+            cost_price_at_sale=product.cost_price
         )
         
-        # Attach the item to the main sale record
         db_sale.items.append(sale_item)
 
-    # 3. Update the total revenue
+    # Apply the final totals
     db_sale.total_revenue = total_calculated_revenue
+    db_sale.total_profit = total_calculated_profit
     
-    # 4. Save everything to the database in one single transaction
     db.add(db_sale)
     db.commit()
     db.refresh(db_sale)
