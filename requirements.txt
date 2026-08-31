@@ -7,3 +7,4 @@ python-dotenv
 pydantic
 passlib[bcrypt]
 PyJWT
+uvicorn 
