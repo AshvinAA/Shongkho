@@ -37,6 +37,9 @@ class CustomerCreate(CustomerBase):
 class CustomerResponse(CustomerBase):
     customer_id: int
     model_config = ConfigDict(from_attributes=True)
+    
+class CustomerUpdate(BaseModel):
+    name: str
 
 # ---------------------------------------------------------
 # 3. EMPLOYEE / USER SCHEMAS

@@ -117,6 +117,9 @@ def update_customer_name(db: Session, customer_id: int, new_name: str):
     db.refresh(customer)
     return customer
 
+def get_customer_sales(db: Session , customer_id: int):
+    return db.query(models.Sale).filter(models.Sale.customer_id == customer_id).all()
+
 # ---------------------------------------------------------
 # CHECKOUT / SALE LOGIC (The most important part)
 # ---------------------------------------------------------
