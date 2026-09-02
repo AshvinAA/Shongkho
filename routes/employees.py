@@ -18,3 +18,6 @@ def search_employees(query: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No employees found matching that search.")
     return results
 
+@router.get("/", response_model=List[schemas.EmployeeResponse])
+def get_employees(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return services.get_employees(db=db, skip=skip, limit=limit)
