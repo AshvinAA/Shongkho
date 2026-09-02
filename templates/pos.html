@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout - Store POS{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Cart Section -->
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 fw-bold">Current Sale</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cart-body">
+                        <!-- Items will be injected here via JS -->
+                        <tr><td colspan="4" class="text-center text-muted py-4">Cart is empty</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-light text-end py-3">
+                <h4 class="mb-0 fw-bold">Total: <span id="cart-total">৳0.00</span></h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer & Payment Section -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 fw-bold">Customer Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" id="customer-phone" class="form-control" placeholder="017..." onblur="checkCustomer()">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Customer Name</label>
+                    <input type="text" id="customer-name" class="form-control" placeholder="Enter name">
+                </div>
+                <input type="hidden" id="customer-id">
+            </div>
+        </div>
+
+        <button class="btn btn-success w-100 btn-lg shadow-sm">Complete Sale</button>
+    </div>
+</div>
+
+<!-- Customer Name Mismatch Modal -->
+<div class="modal fade" id="customerModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title fw-bold">Customer Exists</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>This phone number is already registered to <strong id="existing-name-display"></strong>.</p>
+        <p>Would you like to use the existing profile or update the name to <strong id="new-name-display"></strong>?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="useExistingName()">Use Existing Name</button>
+        <button type="button" class="btn btn-primary" onclick="updateCustomerName()">Update to New Name</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let existingCustomerData = null;
+    const modal = new bootstrap.Modal(document.getElementById('customerModal'));
+
+    async function checkCustomer() {
+        const phone = document.getElementById('customer-phone').value;
+        const currentNameInput = document.getElementById('customer-name').value;
+        
+        if (phone.length < 10) return; // Wait until they finish typing
+
+        try {
+            const response = await fetch(`/customers/phone/${phone}`);
+            if (response.ok) {
+                const customer = await response.json();
+                existingCustomerData = customer;
+                document.getElementById('customer-id').value = customer.customer_id;
+                
+                // If the cashier typed a name, and it doesn't match the DB, show popup
+                if (currentNameInput && currentNameInput.toLowerCase() !== customer.name.toLowerCase()) {
+                    document.getElementById('existing-name-display').innerText = customer.name;
+                    document.getElementById('new-name-display').innerText = currentNameInput;
+                    modal.show();
+                } else {
+                    // Autofill the name if they left it blank
+                    document.getElementById('customer-name').value = customer.name;
+                }
+            }
+        } catch (error) {
+            console.log("New customer, no popup needed.");
+            existingCustomerData = null;
+        }
+    }
+
+    function useExistingName() {
+        document.getElementById('customer-name').value = existingCustomerData.name;
+        modal.hide();
+    }
+
+    async function updateCustomerName() {
+        const newName = document.getElementById('customer-name').value;
+        const customerId = existingCustomerData.customer_id;
+
+        await fetch(`/customers/${customerId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+        });
+        modal.hide();
+        alert("Customer name updated successfully!");
+    }
+</script>
+{% endblock %}
+
