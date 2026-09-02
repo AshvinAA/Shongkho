@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Customers - Store POS{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Search Section -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0 fw-bold">Find Customer</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Search by Phone Number</label>
+                    <div class="input-group">
+                        <input type="text" id="search-phone" class="form-control" placeholder="017...">
+                        <button class="btn btn-outline-primary" onclick="searchCustomer()">Search</button>
+                    </div>
+                </div>
+                <hr>
+                <h6 class="fw-bold">Profile Details</h6>
+                <p class="mb-1">Name: <span id="profile-name" class="text-muted">---</span></p>
+                <p class="mb-1">Phone: <span id="profile-phone" class="text-muted">---</span></p>
+                <button class="btn btn-sm btn-secondary w-100 mt-2" onclick="loadHistory()">View Purchase History</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Section -->
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 fw-bold">Purchase History</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Transaction ID</th>
+                            <th>Total Revenue</th>
+                            <th>Payment Method</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body">
+                        <tr><td colspan="4" class="text-center text-muted py-4">Search a customer to view history</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<input type="hidden" id="current-customer-id">
+{% endblock %}
+

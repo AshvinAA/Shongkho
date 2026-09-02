@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Staff - Store POS{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold">Staff Management</h2>
+    <button class="btn btn-success">+ Register Employee</button>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <table class="table table-striped table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Role / Access Level</th>
+                    <th>Phone</th>
+                </tr>
+            </thead>
+            <tbody id="employee-list">
+                <tr><td colspan="4" class="text-center py-3">Loading staff data...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
