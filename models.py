@@ -33,7 +33,11 @@ class Owner(User):
     store_name = Column(String(255))
 
     # Relationship to track all employees hired by this owner
-    employees = relationship("Employee", back_populates="employer")
+    employees = relationship(
+        "Employee", 
+        foreign_keys="[Employee.employer_id]", 
+        back_populates="employer"
+    )
 
     __mapper_args__ = {
         'polymorphic_identity': 'owner'
@@ -44,14 +48,20 @@ class Employee(User):
     __tablename__ = 'employees'
     
     user_id = Column(Integer, ForeignKey('users.user_id'), primary_key=True)
-    position = Column(String(100))
-    salary = Column(Float)
+    position = Column(String(100), nullable=True)
+    salary = Column(Float, nullable=True)
     date_appointed = Column(Date, default=date.today)
     
-    # Foreign Key pointing to Owner's user_id
-    employer_id = Column(Integer, ForeignKey('owners.user_id'))
+    # Foreign Key referencing the Owner's table
+    employer_id = Column(Integer, ForeignKey('owners.user_id'), nullable=True)
 
-    employer = relationship("Owner", back_populates="employees")
+    # foreign_keys tells SQLAlchemy to use employer_id instead of user_id for this link
+    employer = relationship(
+        "Owner", 
+        foreign_keys=[employer_id], 
+        back_populates="employees"
+    )
+    
     sales = relationship("Sale", back_populates="employee")
 
     __mapper_args__ = {

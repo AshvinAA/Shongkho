@@ -1,87 +1,76 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from passlib.context import CryptContext
 from sqlalchemy import or_
+import bcrypt  # type: ignore
+
 import models
 import schemas
 
 # ---------------------------------------------------------
 # SECURITY & AUTHENTICATION
 # ---------------------------------------------------------
-# Set up password hashing using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    pwd_bytes = plain_password.encode('utf-8')[:72]
+    return bcrypt.checkpw(pwd_bytes, hashed_password.encode('utf-8'))
 
 # ---------------------------------------------------------
-# EMPLOYEE SERVICES
+# USER & AUTH SERVICES
 # ---------------------------------------------------------
-# def create_employee(db: Session, employee: schemas.EmployeeCreate):
-#     # Hash the password before saving it to the database
-#     hashed_pwd = get_password_hash(employee.password)
-    
-#     db_employee = models.Employee(
-#         name=employee.name,
-#         phone_number=employee.phone_number,
-#         address=employee.address,
-#         password=hashed_pwd,
-#         position=employee.position,
-#         salary=employee.salary,
-#         employer_id=employee.employer_id
-#     )
-#     db.add(db_employee)
-#     db.commit()
-#     db.refresh(db_employee)
-#     return db_employee
 
-
-    
-# def search_employees(db: Session, search_term: str):
-#     # This will find employees where the search term matches part of their name OR phone number
-#     return db.query(models.Employee).filter(
-#         or_(
-#             models.Employee.name.contains(search_term),
-#             models.Employee.phone_number.contains(search_term)
-#         )
-#     ).all()
-
-# Setup password hasher
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def register_user(db: Session, user_data: schemas.EmployeeCreate):
-    # 1. Check if the phone number is already registered
-    existing_user = db.query(models.Employee).filter(models.Employee.phone_number == user_data.phone_number).first()
+def register_user(db: Session, user_data: schemas.UserCreate):
+    # 1. Check if phone number is registered
+    existing_user = db.query(models.User).filter(models.User.phone_number == user_data.phone_number).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="This phone number is already registered.")
 
-    # 2. Hash the password
-    hashed_password = pwd_context.hash(user_data.password)
+    # 2. Hash raw password
+    hashed_pwd = hash_password(user_data.password)
+    role = getattr(user_data, 'role', getattr(user_data, 'user_type', 'employee')).lower()
 
-    # 3. Save to database (Using the Employee model for all system users)
-    new_user = models.Employee(
-        name=user_data.name,
-        phone_number=user_data.phone_number,
-        role=user_data.role.lower(), # Store as lowercase 'owner' or 'employee'
-        password_hash=hashed_password
-    )
-    
+    # 3. Instantiate using model field names (`password` instead of `password_hash`)
+    if role == 'owner':
+        new_user = models.Owner(
+            name=user_data.name,
+            phone_number=user_data.phone_number,
+            password=hashed_pwd,
+            address=getattr(user_data, 'address', None),
+            photo=getattr(user_data, 'photo', None),
+            store_name=getattr(user_data, 'store_name', None)
+        )
+    else:
+        new_user = models.Employee(
+            name=user_data.name,
+            phone_number=user_data.phone_number,
+            password=hashed_pwd,
+            address=getattr(user_data, 'address', None),
+            photo=getattr(user_data, 'photo', None),
+            position=getattr(user_data, 'position', None),
+            salary=getattr(user_data, 'salary', None),
+            employer_id=getattr(user_data, 'employer_id', None)
+        )
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
     return new_user
 
 # ---------------------------------------------------------
 # PRODUCT SERVICES
 # ---------------------------------------------------------
+
 def create_product(db: Session, product: schemas.ProductCreate):
-    # Manually mapping each field instead of using model_dump()
     db_product = models.Product(
         product_name=product.product_name,
-        current_price=product.current_price,
-        category=product.category,
-        supplier_name=product.supplier_name
+        cost_price=product.cost_price,
+        retail_price=product.retail_price,
+        category=getattr(product, 'category', None),
+        supplier_name=getattr(product, 'supplier_name', None)
     )
     db.add(db_product)
     db.commit()
@@ -91,26 +80,21 @@ def create_product(db: Session, product: schemas.ProductCreate):
 def get_products(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Product).offset(skip).limit(limit).all()
 
-
 def search_products(db: Session, search_term: str):
-    # This will find products where the search term matches part of their name OR category
     return db.query(models.Product).filter(
         or_(
-            models.Product.product_name.contains(search_term),
-            models.Product.category.contains(search_term)
+            models.Product.product_name.icontains(search_term),
+            models.Product.category.icontains(search_term)
         )
     ).all()
-
 
 # ---------------------------------------------------------
 # CUSTOMER SERVICES
 # ---------------------------------------------------------
 
 def create_customer(db: Session, customer: schemas.CustomerCreate):
-    # Check if a customer with this phone number already exists
     existing_customer = get_customer_by_phone(db, customer.phone_number)
     if existing_customer:
-        # If they exist, raise an error to prevent a database crash
         raise HTTPException(
             status_code=400, 
             detail=f"Phone number {customer.phone_number} is already registered to {existing_customer.name}"
@@ -128,11 +112,9 @@ def create_customer(db: Session, customer: schemas.CustomerCreate):
 def get_customers(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Customer).offset(skip).limit(limit).all()
 
-# NEW: Find a single customer by exact phone number
 def get_customer_by_phone(db: Session, phone_number: str):
     return db.query(models.Customer).filter(models.Customer.phone_number == phone_number).first()
 
-# NEW: Update an existing customer's name
 def update_customer_name(db: Session, customer_id: int, new_name: str):
     customer = db.query(models.Customer).filter(models.Customer.customer_id == customer_id).first()
     if not customer:
@@ -143,11 +125,11 @@ def update_customer_name(db: Session, customer_id: int, new_name: str):
     db.refresh(customer)
     return customer
 
-def get_customer_sales(db: Session , customer_id: int):
+def get_customer_sales(db: Session, customer_id: int):
     return db.query(models.Sale).filter(models.Sale.customer_id == customer_id).all()
 
 # ---------------------------------------------------------
-# CHECKOUT / SALE LOGIC (The most important part)
+# CHECKOUT / SALE LOGIC
 # ---------------------------------------------------------
 
 def create_sale(db: Session, sale_data: schemas.SaleCreate):
@@ -156,7 +138,7 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
         customer_id=sale_data.customer_id,
         payment_method=sale_data.payment_method,
         total_revenue=0.0,
-        total_profit=0.0  # Initialize profit
+        total_profit=0.0
     )
     
     total_calculated_revenue = 0.0
@@ -168,15 +150,12 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
         if not product:
             raise HTTPException(status_code=404, detail=f"Product ID {item.product_id} not found")
             
-        # 1. Calculate Revenue (Retail)
         line_revenue = product.retail_price * item.quantity
         total_calculated_revenue += line_revenue
         
-        # 2. Calculate Profit (Retail - Cost)
         line_profit = (product.retail_price - product.cost_price) * item.quantity
         total_calculated_profit += line_profit
         
-        # 3. Create the SaleItem bridge record
         sale_item = models.SaleItem(
             product_id=product.product_id,
             quantity=item.quantity,
@@ -186,7 +165,6 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
         
         db_sale.items.append(sale_item)
 
-    # Apply the final totals
     db_sale.total_revenue = total_calculated_revenue
     db_sale.total_profit = total_calculated_profit
     
@@ -195,6 +173,3 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
     db.refresh(db_sale)
     
     return db_sale
-
-
-
