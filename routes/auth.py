@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException , status
 from sqlalchemy.orm import Session
 import schemas
 import services
@@ -14,3 +14,10 @@ def register_user(employee: schemas.EmployeeCreate, db: Session = Depends(get_db
 @router.post("/login")
 def login():
     return {"message": "Login endpoint placeholder"}
+
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+@router.post("/register", response_model=schemas.EmployeeResponse, status_code=status.HTTP_201_CREATED)
+def register_account(user_data: schemas.EmployeeCreate, db: Session = Depends(get_db)):
+    return services.register_user(db=db, user_data=user_data)

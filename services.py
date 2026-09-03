@@ -17,34 +17,60 @@ def get_password_hash(password: str) -> str:
 # ---------------------------------------------------------
 # EMPLOYEE SERVICES
 # ---------------------------------------------------------
-def create_employee(db: Session, employee: schemas.EmployeeCreate):
-    # Hash the password before saving it to the database
-    hashed_pwd = get_password_hash(employee.password)
+# def create_employee(db: Session, employee: schemas.EmployeeCreate):
+#     # Hash the password before saving it to the database
+#     hashed_pwd = get_password_hash(employee.password)
     
-    db_employee = models.Employee(
-        name=employee.name,
-        phone_number=employee.phone_number,
-        address=employee.address,
-        password=hashed_pwd,
-        position=employee.position,
-        salary=employee.salary,
-        employer_id=employee.employer_id
+#     db_employee = models.Employee(
+#         name=employee.name,
+#         phone_number=employee.phone_number,
+#         address=employee.address,
+#         password=hashed_pwd,
+#         position=employee.position,
+#         salary=employee.salary,
+#         employer_id=employee.employer_id
+#     )
+#     db.add(db_employee)
+#     db.commit()
+#     db.refresh(db_employee)
+#     return db_employee
+
+
+    
+# def search_employees(db: Session, search_term: str):
+#     # This will find employees where the search term matches part of their name OR phone number
+#     return db.query(models.Employee).filter(
+#         or_(
+#             models.Employee.name.contains(search_term),
+#             models.Employee.phone_number.contains(search_term)
+#         )
+#     ).all()
+
+# Setup password hasher
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def register_user(db: Session, user_data: schemas.EmployeeCreate):
+    # 1. Check if the phone number is already registered
+    existing_user = db.query(models.Employee).filter(models.Employee.phone_number == user_data.phone_number).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="This phone number is already registered.")
+
+    # 2. Hash the password
+    hashed_password = pwd_context.hash(user_data.password)
+
+    # 3. Save to database (Using the Employee model for all system users)
+    new_user = models.Employee(
+        name=user_data.name,
+        phone_number=user_data.phone_number,
+        role=user_data.role.lower(), # Store as lowercase 'owner' or 'employee'
+        password_hash=hashed_password
     )
-    db.add(db_employee)
-    db.commit()
-    db.refresh(db_employee)
-    return db_employee
-
-
     
-def search_employees(db: Session, search_term: str):
-    # This will find employees where the search term matches part of their name OR phone number
-    return db.query(models.Employee).filter(
-        or_(
-            models.Employee.name.contains(search_term),
-            models.Employee.phone_number.contains(search_term)
-        )
-    ).all()
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user
 
 # ---------------------------------------------------------
 # PRODUCT SERVICES
@@ -169,3 +195,6 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
     db.refresh(db_sale)
     
     return db_sale
+
+
+

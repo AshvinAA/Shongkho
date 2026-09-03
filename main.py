@@ -61,5 +61,6 @@ def serve_employees(request: Request):
 def serve_login(request: Request):
     return templates.TemplateResponse(request=request, name="login.html")
 
-
-
+@app.get("/register", tags=["UI"])
+def serve_register(request: Request):
+    return templates.TemplateResponse(request=request, name="register.html")

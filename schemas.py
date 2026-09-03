@@ -44,26 +44,41 @@ class CustomerUpdate(BaseModel):
 # ---------------------------------------------------------
 # 3. EMPLOYEE / USER SCHEMAS
 # ---------------------------------------------------------
-class UserBase(BaseModel):
+# class UserBase(BaseModel):
+#     name: str
+#     phone_number: str
+#     address: Optional[str] = None
+#     photo: Optional[str] = None
+
+# class EmployeeCreate(UserBase):
+#     password: str
+#     position: str
+#     salary: float
+#     employer_id: int
+
+# class EmployeeResponse(UserBase):
+#     user_id: int
+#     position: str
+#     salary: float
+#     date_appointed: date
+#     employer_id: int
+    
+#     model_config = ConfigDict(from_attributes=True)
+
+class EmployeeCreate(BaseModel):
     name: str
     phone_number: str
-    address: Optional[str] = None
-    photo: Optional[str] = None
+    role: str       # They will select "owner" or "employee"
+    password: str   # The raw password from the frontend
 
-class EmployeeCreate(UserBase):
-    password: str
-    position: str
-    salary: float
-    employer_id: int
-
-class EmployeeResponse(UserBase):
+class EmployeeResponse(BaseModel):
     user_id: int
-    position: str
-    salary: float
-    date_appointed: date
-    employer_id: int
-    
-    model_config = ConfigDict(from_attributes=True)
+    name: str
+    phone_number: str
+    role: str
+
+    class Config:
+        from_attributes = True
 
 # ---------------------------------------------------------
 # 4. SALE & CHECKOUT SCHEMAS
