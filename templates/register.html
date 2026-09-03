@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register - Store POS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light d-flex align-items-center justify-content-center" style="height: 100vh;">
+
+    <div class="card shadow-sm border-0" style="width: 450px;">
+        <div class="card-body p-5">
+            <h3 class="text-center mb-4 fw-bold">Create Account</h3>
+            
+            <form id="register-form">
+                <div class="mb-3">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" id="reg-name" class="form-control" placeholder="John Doe" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" id="reg-phone" class="form-control" placeholder="017..." required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Account Type</label>
+                    <select id="reg-role" class="form-select" required>
+                        <option value="owner">Store Owner</option>
+                        <option value="employee">Employee / Cashier</option>
+                    </select>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="reg-password" class="form-control" required>
+                </div>
+                
+                <button type="button" class="btn btn-success w-100 btn-lg" onclick="submitRegistration()">Register Account</button>
+            </form>
+            
+            <div class="text-center mt-3">
+                <a href="/login" class="text-decoration-none">Already have an account? Log in</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function submitRegistration() {
+            const payload = {
+                name: document.getElementById('reg-name').value,
+                phone_number: document.getElementById('reg-phone').value,
+                role: document.getElementById('reg-role').value,
+                password: document.getElementById('reg-password').value
+            };
+
+            // Basic validation
+            if (!payload.name || !payload.phone_number || !payload.password) {
+                alert("Please fill in all fields.");
+                return;
+            }
+
+            try {
+                const response = await fetch('/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert("Registration successful! You can now log in.");
+                    window.location.href = "/login";
+                } else {
+                    alert("Error: " + data.detail);
+                }
+            } catch (error) {
+                console.error("Error during registration:", error);
+                alert("Failed to connect to the server.");
+            }
+        }
+    </script>
+</body>
+</html>
