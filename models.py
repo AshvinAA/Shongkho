@@ -33,11 +33,7 @@ class Owner(User):
     store_name = Column(String(255))
 
     # Relationship to track all employees hired by this owner
-    employees = relationship(
-        "Employee", 
-        foreign_keys="[Employee.employer_id]", 
-        back_populates="employer"
-    )
+    employees = relationship("Employee", back_populates="employer")
 
     __mapper_args__ = {
         'polymorphic_identity': 'owner'
@@ -48,20 +44,14 @@ class Employee(User):
     __tablename__ = 'employees'
     
     user_id = Column(Integer, ForeignKey('users.user_id'), primary_key=True)
-    position = Column(String(100), nullable=True)
-    salary = Column(Float, nullable=True)
+    position = Column(String(100))
+    salary = Column(Float)
     date_appointed = Column(Date, default=date.today)
     
-    # Foreign Key referencing the Owner's table
-    employer_id = Column(Integer, ForeignKey('owners.user_id'), nullable=True)
+    # Foreign Key pointing to Owner's user_id
+    employer_id = Column(Integer, ForeignKey('owners.user_id'))
 
-    # foreign_keys tells SQLAlchemy to use employer_id instead of user_id for this link
-    employer = relationship(
-        "Owner", 
-        foreign_keys=[employer_id], 
-        back_populates="employees"
-    )
-    
+    employer = relationship("Owner", back_populates="employees")
     sales = relationship("Sale", back_populates="employee")
 
     __mapper_args__ = {
@@ -90,9 +80,9 @@ class Product(Base):
     product_id = Column(Integer, primary_key=True, index=True)
     product_name = Column(String(255), nullable=False)
     
-    # Split into Cost and Retail
-    cost_price = Column(Float, nullable=False)   # What YOU pay
-    retail_price = Column(Float, nullable=False) # What the CUSTOMER pays
+    cost_price = Column(Float, nullable=False)   
+    retail_price = Column(Float, nullable=False) 
+    stock_quantity = Column(Integer, default=0, nullable=False) # Add this line
     
     category = Column(String(100))
     supplier_name = Column(String(255))

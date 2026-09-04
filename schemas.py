@@ -8,8 +8,9 @@ from datetime import date, time
 
 class ProductBase(BaseModel):
     product_name: str
-    cost_price: float     # Added
-    retail_price: float   # Added
+    cost_price: float     
+    retail_price: float   
+    stock_quantity: int = 0  # Add this line
     category: Optional[str] = None
     supplier_name: Optional[str] = None
 
@@ -44,26 +45,12 @@ class CustomerUpdate(BaseModel):
 # ---------------------------------------------------------
 # 3. EMPLOYEE / USER SCHEMAS
 # ---------------------------------------------------------
-# class UserBase(BaseModel):
-#     name: str
-#     phone_number: str
-#     address: Optional[str] = None
-#     photo: Optional[str] = None
+class UserBase(BaseModel):
+    name: str
+    phone_number: str
+    address: Optional[str] = None
+    photo: Optional[str] = None
 
-# class EmployeeCreate(UserBase):
-#     password: str
-#     position: str
-#     salary: float
-#     employer_id: int
-
-# class EmployeeResponse(UserBase):
-#     user_id: int
-#     position: str
-#     salary: float
-#     date_appointed: date
-#     employer_id: int
-    
-#     model_config = ConfigDict(from_attributes=True)
 
 class EmployeeCreate(BaseModel):
     name: str
