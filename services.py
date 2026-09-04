@@ -69,6 +69,7 @@ def create_product(db: Session, product: schemas.ProductCreate):
         product_name=product.product_name,
         cost_price=product.cost_price,
         retail_price=product.retail_price,
+        stock_quantity=product.stock_quantity,  # Add this line
         category=getattr(product, 'category', None),
         supplier_name=getattr(product, 'supplier_name', None)
     )
@@ -76,7 +77,6 @@ def create_product(db: Session, product: schemas.ProductCreate):
     db.commit()
     db.refresh(db_product)
     return db_product
-
 def get_products(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Product).offset(skip).limit(limit).all()
 
@@ -85,6 +85,23 @@ def search_products(db: Session, search_term: str):
         or_(
             models.Product.product_name.icontains(search_term),
             models.Product.category.icontains(search_term)
+        )
+    ).all()
+    
+# ---------------------------------------------------------
+# EMPLOYEE SERVICES
+# ---------------------------------------------------------
+
+def get_employees(db: Session, skip: int = 0, limit: int = 100):
+    # Notice we query models.Employee specifically, filtering out Owners
+    return db.query(models.Employee).offset(skip).limit(limit).all()
+
+def search_employees(db: Session, search_term: str):
+    return db.query(models.Employee).filter(
+        or_(
+            models.Employee.name.icontains(search_term),
+            models.Employee.position.icontains(search_term),
+            models.Employee.phone_number.icontains(search_term)
         )
     ).all()
 
@@ -133,6 +150,7 @@ def get_customer_sales(db: Session, customer_id: int):
 # ---------------------------------------------------------
 
 def create_sale(db: Session, sale_data: schemas.SaleCreate):
+    # 1. Initialize the Sale record
     db_sale = models.Sale(
         employee_id=sale_data.employee_id,
         customer_id=sale_data.customer_id,
@@ -144,18 +162,32 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
     total_calculated_revenue = 0.0
     total_calculated_profit = 0.0
     
+    # 2. Process each item in the cart
     for item in sale_data.items:
+        # Fetch the authoritative product data from the database
         product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
         
         if not product:
             raise HTTPException(status_code=404, detail=f"Product ID {item.product_id} not found")
             
+        # 3. STOCK VALIDATION: Prevent selling more than what is available
+        if product.stock_quantity < item.quantity:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Not enough stock for '{product.product_name}'. Available: {product.stock_quantity}, Requested: {item.quantity}"
+            )
+            
+        # 4. STOCK DEDUCTION: Subtract the purchased amount from inventory
+        product.stock_quantity -= item.quantity
+            
+        # 5. Financial Calculations (Securely using DB prices)
         line_revenue = product.retail_price * item.quantity
         total_calculated_revenue += line_revenue
         
         line_profit = (product.retail_price - product.cost_price) * item.quantity
         total_calculated_profit += line_profit
         
+        # 6. Create the bridging SaleItem record
         sale_item = models.SaleItem(
             product_id=product.product_id,
             quantity=item.quantity,
@@ -165,9 +197,11 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
         
         db_sale.items.append(sale_item)
 
+    # 7. Finalize totals
     db_sale.total_revenue = total_calculated_revenue
     db_sale.total_profit = total_calculated_profit
     
+    # 8. Save everything to TiDB
     db.add(db_sale)
     db.commit()
     db.refresh(db_sale)

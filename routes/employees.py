@@ -9,7 +9,8 @@ router = APIRouter(prefix="/employees", tags=["Employees"])
 
 @router.post("/", response_model=schemas.EmployeeResponse)
 def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
-    return services.create_employee(db=db, employee=employee)
+    # Re-use the existing registration logic!
+    return services.register_user(db=db, user_data=employee)
 
 @router.get("/search/", response_model=List[schemas.EmployeeResponse])
 def search_employees(query: str, db: Session = Depends(get_db)):

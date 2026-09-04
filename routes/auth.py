@@ -7,17 +7,11 @@ from database import get_db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-@router.post("/register", response_model=schemas.EmployeeResponse)
-def register_user(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
-    return services.create_employee(db=db, employee=employee)
+@router.post("/register", response_model=schemas.EmployeeResponse, status_code=status.HTTP_201_CREATED)
+def register_account(user_data: schemas.EmployeeCreate, db: Session = Depends(get_db)):
+    # This matches the services.register_user function from Batch 2 perfectly!
+    return services.register_user(db=db, user_data=user_data)
 
 @router.post("/login")
 def login():
     return {"message": "Login endpoint placeholder"}
-
-
-router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-@router.post("/register", response_model=schemas.EmployeeResponse, status_code=status.HTTP_201_CREATED)
-def register_account(user_data: schemas.EmployeeCreate, db: Session = Depends(get_db)):
-    return services.register_user(db=db, user_data=user_data)
