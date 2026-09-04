@@ -18,14 +18,58 @@
                     <th>Category</th>
                     <th>Cost Price</th>
                     <th>Retail Price</th>
+                    <th>Stock Qty</th>
                 </tr>
             </thead>
             <tbody id="product-list">
-                <!-- We will fetch this data with JS later -->
-                <tr><td colspan="5" class="text-center py-3">Loading inventory...</td></tr>
+                <tr><td colspan="6" class="text-center py-3">Loading inventory...</td></tr>
             </tbody>
         </table>
     </div>
 </div>
 {% endblock %}
 
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", async function() {
+        const tbody = document.getElementById('product-list');
+
+        try {
+            // No token headers required anymore!
+            const response = await fetch('/products/', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                const products = await response.json();
+                tbody.innerHTML = ''; 
+
+                if (products.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No products found in inventory.</td></tr>`;
+                    return;
+                }
+
+                products.forEach(product => {
+                    const row = `
+                        <tr>
+                            <td>#${product.product_id}</td>
+                            <td class="fw-bold">${product.product_name}</td>
+                            <td><span class="badge bg-secondary">${product.category || 'N/A'}</span></td>
+                            <td class="text-danger">৳${product.cost_price.toFixed(2)}</td>
+                            <td class="text-success fw-bold">৳${product.retail_price.toFixed(2)}</td>
+                            <td>${product.stock_quantity}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            } else {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-danger">Failed to load products.</td></tr>`;
+            }
+        } catch (error) {
+            console.error("Error fetching products:", error);
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-danger">Server connection error.</td></tr>`;
+        }
+    });
+</script>
+{% endblock %}

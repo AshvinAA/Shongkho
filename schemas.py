@@ -24,9 +24,15 @@ class ProductResponse(ProductBase):
     
     # Allows Pydantic to read data directly from SQLAlchemy models
     model_config = ConfigDict(from_attributes=True)
+    
+
+
+class UserLogin(BaseModel):
+    phone_number: str
+    password: str
 
 # ---------------------------------------------------------
-# 2. CUSTOMER SCHEMAS
+# CUSTOMER SCHEMAS
 # ---------------------------------------------------------
 class CustomerBase(BaseModel):
     name: str

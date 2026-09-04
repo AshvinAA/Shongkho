@@ -12,8 +12,8 @@
             <h3 class="text-center mb-4 fw-bold">🛒 POS Login</h3>
             <form id="login-form">
                 <div class="mb-3">
-                    <label class="form-label">Phone Number / Username</label>
-                    <input type="text" class="form-control" required>
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" class="form-control" required placeholder="017...">
                 </div>
                 <div class="mb-4">
                     <label class="form-label">Password</label>
@@ -21,9 +21,44 @@
                 </div>
                 <button type="submit" class="btn btn-primary w-100 btn-lg">Log In</button>
             </form>
+            <div class="text-center mt-3">
+                <a href="/register" class="text-decoration-none text-muted">Need an account? Register here.</a>
+            </div>
         </div>
     </div>
 
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const inputs = document.querySelectorAll('.form-control');
+            const phone = inputs[0].value;
+            const password = inputs[1].value;
+            
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: phone, password: password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Honor System: Save the raw user details directly to LocalStorage
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('role', data.role);
+                    localStorage.setItem('name', data.name);
+                    
+                    window.location.href = "/"; 
+                } else {
+                    alert("Login failed: " + (data.detail || "Invalid credentials"));
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                alert("Could not connect to the server.");
+            }
+        });
+    </script>
 </body>
 </html>
-
