@@ -68,7 +68,7 @@ class EmployeeResponse(BaseModel):
     user_id: int
     name: str
     phone_number: str
-    role: str
+    user_type: str
 
     class Config:
         from_attributes = True

@@ -32,8 +32,12 @@ class Owner(User):
     user_id = Column(Integer, ForeignKey('users.user_id'), primary_key=True)
     store_name = Column(String(255))
 
-    # Relationship to track all employees hired by this owner
-    employees = relationship("Employee", back_populates="employer")
+    # Provide the EXACT explicit join condition
+    employees = relationship(
+        "Employee", 
+        primaryjoin="Owner.user_id == Employee.employer_id", # <--- Forces the exact join
+        back_populates="employer"
+    )
 
     __mapper_args__ = {
         'polymorphic_identity': 'owner'
@@ -48,10 +52,14 @@ class Employee(User):
     salary = Column(Float)
     date_appointed = Column(Date, default=date.today)
     
-    # Foreign Key pointing to Owner's user_id
     employer_id = Column(Integer, ForeignKey('owners.user_id'))
 
-    employer = relationship("Owner", back_populates="employees")
+    # Match the exact join condition from the Owner side
+    employer = relationship(
+        "Owner", 
+        primaryjoin="Owner.user_id == Employee.employer_id", # <--- Forces the exact join
+        back_populates="employees"
+    )
     sales = relationship("Sale", back_populates="employee")
 
     __mapper_args__ = {
