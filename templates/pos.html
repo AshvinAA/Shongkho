@@ -4,8 +4,25 @@
 
 {% block content %}
 <div class="row g-4">
-    <!-- Cart Section -->
     <div class="col-md-8">
+        <div class="card shadow-sm border-0 mb-3">
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label">Product ID</label>
+                        <input type="number" id="add-product-id" class="form-control" placeholder="Scan or enter ID">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" id="add-qty" class="form-control" value="1" min="1">
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-primary w-100" onclick="addItemToCart()">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card shadow-sm border-0 h-100">
             <div class="card-header bg-white">
                 <h5 class="mb-0 fw-bold">Current Sale</h5>
@@ -14,25 +31,19 @@
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Item</th>
+                            <th>ID</th>
                             <th>Qty</th>
-                            <th>Price</th>
-                            <th>Total</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="cart-body">
-                        <!-- Items will be injected here via JS -->
-                        <tr><td colspan="4" class="text-center text-muted py-4">Cart is empty</td></tr>
+                        <tr><td colspan="3" class="text-center text-muted py-4">Cart is empty</td></tr>
                     </tbody>
                 </table>
-            </div>
-            <div class="card-footer bg-light text-end py-3">
-                <h4 class="mb-0 fw-bold">Total: <span id="cart-total">৳0.00</span></h4>
             </div>
         </div>
     </div>
 
-    <!-- Customer & Payment Section -->
     <div class="col-md-4">
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white">
@@ -51,11 +62,10 @@
             </div>
         </div>
 
-        <button class="btn btn-success w-100 btn-lg shadow-sm">Complete Sale</button>
+        <button class="btn btn-success w-100 btn-lg shadow-sm" onclick="completeSale()">Complete Sale</button>
     </div>
 </div>
 
-<!-- Customer Name Mismatch Modal -->
 <div class="modal fade" id="customerModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -78,6 +88,108 @@
 
 {% block scripts %}
 <script>
+    // --- CART LOGIC ---
+    let cart = [];
+    
+    function addItemToCart() {
+        const productId = parseInt(document.getElementById('add-product-id').value);
+        const qty = parseInt(document.getElementById('add-qty').value);
+        
+        if (!productId || isNaN(qty) || qty <= 0) return;
+
+        // Check if item is already in cart, if so, update qty
+        const existingItemIndex = cart.findIndex(item => item.product_id === productId);
+        if (existingItemIndex > -1) {
+            cart[existingItemIndex].quantity += qty;
+        } else {
+            cart.push({ product_id: productId, quantity: qty });
+        }
+        
+        // Reset inputs and update UI
+        document.getElementById('add-product-id').value = '';
+        document.getElementById('add-qty').value = '1';
+        updateCartUI();
+    }
+
+    function removeItem(index) {
+        cart.splice(index, 1);
+        updateCartUI();
+    }
+
+    function updateCartUI() {
+        const tbody = document.getElementById('cart-body');
+        if (cart.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">Cart is empty</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = '';
+        cart.forEach((item, index) => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>#${item.product_id}</td>
+                    <td>${item.quantity}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="removeItem(${index})">X</button></td>
+                </tr>
+            `;
+        });
+    }
+
+    // --- CHECKOUT LOGIC ---
+    async function completeSale() {
+        if (cart.length === 0) {
+            alert("Cart is empty!");
+            return;
+        }
+
+        const customerId = document.getElementById('customer-id').value;
+        if (!customerId) {
+            alert("Please search and select a valid customer before checking out.");
+            return;
+        }
+
+        // Pull the employee ID directly from LocalStorage
+        const employeeId = localStorage.getItem('user_id');
+        if (!employeeId) {
+            alert("Session error: Employee ID not found. Please log in again.");
+            return;
+        }
+
+        // Construct the payload matching your FastAPI SaleCreate schema
+        const payload = {
+            employee_id: parseInt(employeeId),
+            customer_id: parseInt(customerId),
+            payment_method: "Cash", // Hardcoding Cash for the beta, can add a dropdown later
+            items: cart
+        };
+
+        try {
+            const response = await fetch('/checkout/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(`Sale Complete! Transaction ID: #${data.transaction_id}\nTotal Revenue: ৳${data.total_revenue}`);
+                // Clear the cart and UI for the next customer
+                cart = [];
+                updateCartUI();
+                document.getElementById('customer-phone').value = '';
+                document.getElementById('customer-name').value = '';
+                document.getElementById('customer-id').value = '';
+            } else {
+                alert("Checkout failed: " + (data.detail || "Unknown error"));
+            }
+        } catch (error) {
+            console.error("Checkout error:", error);
+            alert("Could not connect to server during checkout.");
+        }
+    }
+
+    // --- CUSTOMER LOOKUP LOGIC (Retained from your original) ---
     let existingCustomerData = null;
     const modal = new bootstrap.Modal(document.getElementById('customerModal'));
 
@@ -85,7 +197,7 @@
         const phone = document.getElementById('customer-phone').value;
         const currentNameInput = document.getElementById('customer-name').value;
         
-        if (phone.length < 10) return; // Wait until they finish typing
+        if (phone.length < 10) return;
 
         try {
             const response = await fetch(`/customers/phone/${phone}`);
@@ -94,18 +206,15 @@
                 existingCustomerData = customer;
                 document.getElementById('customer-id').value = customer.customer_id;
                 
-                // If the cashier typed a name, and it doesn't match the DB, show popup
                 if (currentNameInput && currentNameInput.toLowerCase() !== customer.name.toLowerCase()) {
                     document.getElementById('existing-name-display').innerText = customer.name;
                     document.getElementById('new-name-display').innerText = currentNameInput;
                     modal.show();
                 } else {
-                    // Autofill the name if they left it blank
                     document.getElementById('customer-name').value = customer.name;
                 }
             }
         } catch (error) {
-            console.log("New customer, no popup needed.");
             existingCustomerData = null;
         }
     }
@@ -125,8 +234,7 @@
             body: JSON.stringify({ name: newName })
         });
         modal.hide();
-        alert("Customer name updated successfully!");
+        alert("Customer name updated!");
     }
 </script>
 {% endblock %}
-

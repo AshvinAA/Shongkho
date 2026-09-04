@@ -2,7 +2,6 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from sqlalchemy import or_
 import bcrypt  # type: ignore
-
 import models
 import schemas
 
@@ -19,11 +18,26 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     pwd_bytes = plain_password.encode('utf-8')[:72]
     return bcrypt.checkpw(pwd_bytes, hashed_password.encode('utf-8'))
 
+def authenticate_user(db: Session, phone_number: str, password: str):
+    # 1. Find the user by phone number
+    user = db.query(models.User).filter(models.User.phone_number == phone_number).first()
+    
+    # If the phone number isn't in the database, return False
+    if not user:
+        return False
+        
+    # 2. Verify the password (this uses the verify_password function you wrote in Batch 2)
+    if not verify_password(password, user.password):
+        return False
+        
+    # 3. If both match, return the user object back to process_login
+    return user
+
 # ---------------------------------------------------------
 # USER & AUTH SERVICES
 # ---------------------------------------------------------
 
-def register_user(db: Session, user_data: schemas.UserCreate):
+def register_user(db: Session, user_data: schemas.EmployeeCreate):
     # 1. Check if phone number is registered
     existing_user = db.query(models.User).filter(models.User.phone_number == user_data.phone_number).first()
     if existing_user:
@@ -60,6 +74,23 @@ def register_user(db: Session, user_data: schemas.UserCreate):
     db.refresh(new_user)
     return new_user
 
+def process_login(db: Session, user_credentials: schemas.UserLogin):
+    # 1. Check DB and password hash
+    user = authenticate_user(db, user_credentials.phone_number, user_credentials.password)
+    
+    # 2. Raise HTTP error if credentials fail
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect phone number or password"
+        )
+        
+    # 3. Return the raw user data directly
+    return {
+        "user_id": user.user_id,
+        "role": user.user_type,
+        "name": user.name
+    }
 # ---------------------------------------------------------
 # PRODUCT SERVICES
 # ---------------------------------------------------------
@@ -88,6 +119,7 @@ def search_products(db: Session, search_term: str):
         )
     ).all()
     
+
 # ---------------------------------------------------------
 # EMPLOYEE SERVICES
 # ---------------------------------------------------------
