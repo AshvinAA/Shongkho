@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shongkho — Dashboard</title>
+  
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Tabler Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.36.0/tabler-icons.min.css">
+
+  <style>
+    body { background-color: #f6f8fa; font-family: system-ui, sans-serif; }
+    .card-flat { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem; }
+    .icon-chip { width: 36px; height: 36px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 0.65rem; }
+    .avatar-circle { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+  <!-- ================= SHARED HEADER ================= -->
+  <header class="bg-white border-bottom sticky-top py-2 px-4">
+    <div class="d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <div class="bg-dark text-white rounded-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+          <i class="ti ti-building-store"></i>
+        </div>
+        <span class="fs-5 fw-medium">Shongkho</span>
+      </div>
+
+      <nav class="d-none d-md-flex align-items-center gap-1">
+        <a href="dashboard.html" class="text-dark fw-semibold text-decoration-none px-3 py-1 bg-light rounded">Dashboard</a>
+        <a href="/inventory" class="text-muted text-decoration-none px-3 py-1">Inventory</a>
+        <a href="pos.html" class="text-muted text-decoration-none px-3 py-1">POS</a>
+        {% if user.role == 'owner' %}
+          <a href="employees.html" class="text-muted text-decoration-none px-3 py-1">Employees</a>
+        {% endif %}
+      </nav>
+
+      <div class="d-flex align-items-center gap-3">
+        <div class="avatar-circle {% if user.role == 'owner' %}bg-indigo-subtle text-indigo{% else %}bg-pink-subtle text-pink{% endif %}" style="background-color: #e0e7ff; color: #3730a3;">
+          {{ user.name[:2].upper() }}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTENT AREA ================= -->
+  <main class="container-fluid px-4 py-4">
+
+    {% if user.role == 'owner' %}
+      <!-- ================= OWNER VIEW ================= -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 class="h4 fw-bold mb-1">Good morning, {{ user.name }}</h1>
+          <p class="text-muted fs-14 mb-0">Owner Dashboard &bull; Full system oversight</p>
+        </div>
+        <button class="btn btn-dark">+ Add Product</button>
+      </div>
+
+      <!-- Owner 4 Metric Cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <div class="card-flat">
+            <div class="icon-chip bg-success-subtle text-success"><i class="ti ti-cash"></i></div>
+            <div class="text-muted fs-13">Today's Revenue</div>
+            <h3 class="fw-bold mt-1">৳ 48,500</h3>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card-flat">
+            <div class="icon-chip bg-primary-subtle text-primary"><i class="ti ti-shopping-cart"></i></div>
+            <div class="text-muted fs-13">Orders Today</div>
+            <h3 class="fw-bold mt-1">142</h3>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card-flat">
+            <div class="icon-chip bg-warning-subtle text-warning"><i class="ti ti-boxes"></i></div>
+            <div class="text-muted fs-13">Inventory Value</div>
+            <h3 class="fw-bold mt-1">৳ 12,45,000</h3>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card-flat bg-danger-subtle border-danger-subtle">
+            <div class="icon-chip bg-danger text-white"><i class="ti ti-alert-triangle"></i></div>
+            <div class="text-danger fw-medium fs-13">Low Stock Alerts</div>
+            <h3 class="fw-bold text-danger mt-1">7 Items</h3>
+          </div>
+        </div>
+      </div>
+
+    {% else %}
+      <!-- ================= EMPLOYEE VIEW ================= -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 class="h4 fw-bold mb-1">Hi, {{ user.name }}</h1>
+          <p class="text-muted fs-14 mb-0">Active shift &bull; Counter #2</p>
+        </div>
+        <button class="btn btn-dark">+ Log a Sale</button>
+
+      <!-- Employee 3 Metric Cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="card-flat">
+            <div class="icon-chip bg-success-subtle text-success"><i class="ti ti-cash"></i></div>
+            <div class="text-muted fs-13">My Sales Today</div>
+            <h3 class="fw-bold mt-1">৳ 18,200</h3>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card-flat">
+            <div class="icon-chip bg-primary-subtle text-primary"><i class="ti ti-shopping-bag"></i></div>
+            <div class="text-muted fs-13">Orders Handled</div>
+            <h3 class="fw-bold mt-1">34</h3>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card-flat">
+            <div class="icon-chip bg-warning-subtle text-warning"><i class="ti ti-target-arrow"></i></div>
+            <div class="text-muted fs-13">Monthly Target</div>
+            <h3 class="fw-bold mt-1">৳ 88,000</h3>
+          </div>
+        </div>
+      </div>
+
+    {% endif %}
+
+  </main>
+
+</body>
+</html>
