@@ -45,12 +45,16 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Honor System: Save the raw user details directly to LocalStorage
                     localStorage.setItem('user_id', data.user_id);
                     localStorage.setItem('role', data.role);
                     localStorage.setItem('name', data.name);
                     
-                    window.location.href = "/"; 
+                    if (data.role === 'owner') {
+                        window.location.href = "/owner-dashboard";
+                    } else {
+                        window.location.href = "/employee-dashboard";
+                    }
+
                 } else {
                     alert("Login failed: " + (data.detail || "Invalid credentials"));
                 }
