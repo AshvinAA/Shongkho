@@ -6,5 +6,8 @@ cryptography
 python-dotenv
 pydantic
 passlib[bcrypt]
+bcrypt
 PyJWT
-uvicorn 
+itsdangerous
+jinja2
+python-multipart

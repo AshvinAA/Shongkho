@@ -5,7 +5,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold">Inventory</h2>
-    <button class="btn btn-primary">+ Add Product</button>
+    {% if user.role == 'owner' %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">+ Add Product</button>
+    {% endif %}
 </div>
 
 <div class="card shadow-sm border-0">
@@ -18,58 +20,194 @@
                     <th>Category</th>
                     <th>Cost Price</th>
                     <th>Retail Price</th>
-                    <th>Stock Qty</th>
+                    <th>Stock</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="product-list">
-                <tr><td colspan="6" class="text-center py-3">Loading inventory...</td></tr>
+                <tr><td colspan="7" class="text-center py-3">Loading inventory...</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Add Product Modal (owner) -->
+<div class="modal fade" id="addProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label">Name</label><input id="p-name" class="form-control"></div>
+                <div class="row">
+                    <div class="col mb-2"><label class="form-label">Cost Price</label><input type="number" id="p-cost" class="form-control"></div>
+                    <div class="col mb-2"><label class="form-label">Retail Price</label><input type="number" id="p-retail" class="form-control"></div>
+                </div>
+                <div class="row">
+                    <div class="col mb-2"><label class="form-label">Stock</label><input type="number" id="p-stock" class="form-control" value="0"></div>
+                    <div class="col mb-2"><label class="form-label">Category</label><input id="p-category" class="form-control"></div>
+                </div>
+                <div class="mb-2"><label class="form-label">Supplier</label><input id="p-supplier" class="form-control"></div>
+                <button class="btn btn-primary w-100" onclick="submitNewProduct()">Save Product</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Product Modal (owner) -->
+<div class="modal fade" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Product <span id="edit-p-id-badge" class="badge bg-secondary"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2"><label class="form-label">Name</label><input id="edit-p-name" class="form-control"></div>
+                <div class="row">
+                    <div class="col mb-2"><label class="form-label">Cost Price</label><input type="number" id="edit-p-cost" class="form-control"></div>
+                    <div class="col mb-2"><label class="form-label">Retail Price</label><input type="number" id="edit-p-retail" class="form-control"></div>
+                </div>
+                <div class="row">
+                    <div class="col mb-2"><label class="form-label">Category</label><input id="edit-p-category" class="form-control"></div>
+                    <div class="col mb-2"><label class="form-label">Supplier</label><input id="edit-p-supplier" class="form-control"></div>
+                </div>
+                <hr>
+                <label class="form-label fw-bold">Adjust Stock (±)</label>
+                <div class="input-group mb-3">
+                    <input type="number" id="edit-stock-change" class="form-control" placeholder="e.g. 10 or -5">
+                    <button class="btn btn-outline-secondary" onclick="applyStockChange()">Apply</button>
+                </div>
+                <button class="btn btn-primary w-100" onclick="submitEditProduct()">Save Changes</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.addEventListener("DOMContentLoaded", async function() {
+    const IS_OWNER = window.APP_USER.role === 'owner';
+
+    document.addEventListener("DOMContentLoaded", loadProducts);
+
+    async function loadProducts() {
         const tbody = document.getElementById('product-list');
-
         try {
-            // No token headers required anymore!
-            const response = await fetch('/products/', {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
-            });
+            const response = await fetch('/products/');
+            if (!response.ok) throw new Error('failed');
+            const products = await response.json();
+            tbody.innerHTML = '';
 
-            if (response.ok) {
-                const products = await response.json();
-                tbody.innerHTML = ''; 
-
-                if (products.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No products found in inventory.</td></tr>`;
-                    return;
-                }
-
-                products.forEach(product => {
-                    const row = `
-                        <tr>
-                            <td>#${product.product_id}</td>
-                            <td class="fw-bold">${product.product_name}</td>
-                            <td><span class="badge bg-secondary">${product.category || 'N/A'}</span></td>
-                            <td class="text-danger">৳${product.cost_price.toFixed(2)}</td>
-                            <td class="text-success fw-bold">৳${product.retail_price.toFixed(2)}</td>
-                            <td>${product.stock_quantity}</td>
-                        </tr>
-                    `;
-                    tbody.innerHTML += row;
-                });
-            } else {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-danger">Failed to load products.</td></tr>`;
+            if (products.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No products found in inventory.</td></tr>`;
+                return;
             }
+
+            products.forEach(p => {
+                const lowStock = p.stock_quantity <= 5 ? 'text-danger fw-bold' : '';
+                const actions = IS_OWNER ? `
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${p.product_id})">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(${p.product_id})">Delete</button>
+                    </td>` : '<td class="text-muted small">Read-only</td>';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>#${p.product_id}</td>
+                        <td class="fw-bold">${p.product_name}</td>
+                        <td><span class="badge bg-secondary">${p.category || 'N/A'}</span></td>
+                        <td class="text-danger">${p.cost_price.toFixed(2)}</td>
+                        <td class="text-success fw-bold">${p.retail_price.toFixed(2)}</td>
+                        <td class="${lowStock}">${p.stock_quantity}</td>
+                        ${actions}
+                    </tr>`;
+            });
         } catch (error) {
-            console.error("Error fetching products:", error);
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-danger">Server connection error.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-3 text-danger">Failed to load products.</td></tr>`;
         }
-    });
+    }
+
+    // --- OWNER: add ---
+    async function submitNewProduct() {
+        const payload = {
+            product_name: document.getElementById('p-name').value.trim(),
+            cost_price: parseFloat(document.getElementById('p-cost').value),
+            retail_price: parseFloat(document.getElementById('p-retail').value),
+            stock_quantity: parseInt(document.getElementById('p-stock').value) || 0,
+            category: document.getElementById('p-category').value.trim() || null,
+            supplier_name: document.getElementById('p-supplier').value.trim() || null
+        };
+        if (!payload.product_name || isNaN(payload.cost_price) || isNaN(payload.retail_price)) {
+            alert("Name, cost price and retail price are required.");
+            return;
+        }
+        const r = await fetch('/products/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (r.ok) { bootstrap.Modal.getInstance(document.getElementById('addProductModal')).hide(); loadProducts(); }
+        else alert("Error: " + data.detail);
+    }
+
+    // --- OWNER: edit ---
+    let editId = null;
+    async function openEdit(id) {
+        const r = await fetch(`/products/${id}`);
+        const p = await r.json();
+        editId = id;
+        document.getElementById('edit-p-id-badge').innerText = `#${id}`;
+        document.getElementById('edit-p-name').value = p.product_name;
+        document.getElementById('edit-p-cost').value = p.cost_price;
+        document.getElementById('edit-p-retail').value = p.retail_price;
+        document.getElementById('edit-p-category').value = p.category || '';
+        document.getElementById('edit-p-supplier').value = p.supplier_name || '';
+        document.getElementById('edit-stock-change').value = '';
+        new bootstrap.Modal(document.getElementById('editProductModal')).show();
+    }
+
+    async function applyStockChange() {
+        const change = parseInt(document.getElementById('edit-stock-change').value);
+        if (isNaN(change) || change === 0) return;
+        const r = await fetch(`/products/${editId}/stock`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity_change: change })
+        });
+        const data = await r.json();
+        if (r.ok) { loadProducts(); }
+        else alert("Error: " + data.detail);
+    }
+
+    async function submitEditProduct() {
+        const payload = {
+            product_name: document.getElementById('edit-p-name').value.trim(),
+            cost_price: parseFloat(document.getElementById('edit-p-cost').value),
+            retail_price: parseFloat(document.getElementById('edit-p-retail').value),
+            category: document.getElementById('edit-p-category').value.trim() || null,
+            supplier_name: document.getElementById('edit-p-supplier').value.trim() || null
+        };
+        const r = await fetch(`/products/${editId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (r.ok) { bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide(); loadProducts(); }
+        else alert("Error: " + data.detail);
+    }
+
+    // --- OWNER: delete ---
+    async function deleteProduct(id) {
+        if (!confirm("Delete this product?")) return;
+        const r = await fetch(`/products/${id}`, { method: 'DELETE' });
+        const data = await r.json();
+        if (r.ok) loadProducts();
+        else alert("Error: " + (data.detail || "Delete failed"));
+    }
 </script>
 {% endblock %}

@@ -99,12 +99,14 @@
 #         }
 #     )
 from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from routes import auth, products, sales, customers, employees
+import deps
 
 app = FastAPI(title="Store POS API", version="2.0")
 
@@ -127,37 +129,17 @@ app.include_router(employees.router)
 app.include_router(products.router)
 app.include_router(customers.router)
 app.include_router(sales.router)
+app.include_router(sales.sales_router)
 
 
 # ---------------------------------------------------------
-# AUTH CHECK FUNCTIONS 
+# AUTH CHECK FUNCTIONS (implemented in deps.py)
 # ---------------------------------------------------------
 
-def get_current_user(request: Request):
-    user_id = request.session.get("user_id")
-    role = request.session.get("role")
-    name = request.session.get("name")
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not logged in"
-        )
-
-    return {"id": user_id, "role": role, "name": name}
-
-
-def get_current_owner(current_user = Depends(get_current_user)):
-    if current_user["role"] != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Owners only"
-        )
-    return current_user
-
-
-def get_current_employee(current_user = Depends(get_current_user)):
-    return current_user
+get_current_user = deps.get_current_user
+get_current_owner = deps.require_owner
+get_current_employee = deps.require_any
+get_optional_user = deps.get_optional_user
 
 
 # ---------------------------------------------------------
@@ -165,27 +147,60 @@ def get_current_employee(current_user = Depends(get_current_user)):
 # ---------------------------------------------------------
 
 @app.get("/", tags=["UI"])
-def serve_home(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+def serve_home(request: Request, user=Depends(get_optional_user)):
+    # Send users straight to the right dashboard
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if user["role"] == "owner":
+        return RedirectResponse(url="/owner-dashboard", status_code=302)
+    return RedirectResponse(url="/employee-dashboard", status_code=302)
 
 @app.get("/pos", tags=["UI"])
-def serve_pos(request: Request):
-    return templates.TemplateResponse(request=request, name="pos.html")
+def serve_pos(request: Request, user=Depends(get_optional_user)):
+    # POS terminal — both roles can ring up sales
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request, name="pos.html", context={"request": request, "user": user}
+    )
 
 @app.get("/inventory", tags=["UI"])
-def serve_products(request: Request):
-    return templates.TemplateResponse(request=request, name="products.html")
+def serve_products(request: Request, user=Depends(get_optional_user)):
+    # Inventory — both roles can view; owner gets edit buttons (in template)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request, name="products.html", context={"request": request, "user": user}
+    )
 
+@app.get("/customers", tags=["UI"])
 @app.get("/customers-ui", tags=["UI"])
-def serve_customers(request: Request):
-    return templates.TemplateResponse(request=request, name="customers.html")
+def serve_customers(request: Request, user=Depends(get_optional_user)):
+    # Customers — both roles can look up customers & purchase history
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request, name="customers.html", context={"request": request, "user": user}
+    )
 
 @app.get("/staff", tags=["UI"])
-def serve_employees(request: Request):
-    return templates.TemplateResponse(request=request, name="employees.html")
+def serve_employees(request: Request, user=Depends(get_optional_user)):
+    # OWNER ONLY — employees are redirected to their dashboard
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if user["role"] != "owner":
+        return RedirectResponse(url="/employee-dashboard", status_code=302)
+    return templates.TemplateResponse(
+        request=request, name="employees.html", context={"request": request, "user": user}
+    )
 
 @app.get("/login", tags=["UI"])
-def serve_login(request: Request):
+def serve_login(request: Request, user=Depends(get_optional_user)):
+    # Already logged in? Go straight to the right dashboard.
+    if user:
+        if user["role"] == "owner":
+            return RedirectResponse(url="/owner-dashboard", status_code=302)
+        return RedirectResponse(url="/employee-dashboard", status_code=302)
     return templates.TemplateResponse(request=request, name="login.html")
 
 @app.get("/register", tags=["UI"])
@@ -193,22 +208,41 @@ def serve_register(request: Request):
     return templates.TemplateResponse(request=request, name="register.html")
 
 
+@app.get("/sales", tags=["UI"])
+def serve_sales(request: Request, user=Depends(get_optional_user)):
+    # Sales history: owner sees all, employee sees only their own (filtered by API)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request, name="sales.html", context={"request": request, "user": user}
+    )
+
+
 # ---------------------------------------------------------
 # UI ROUTES — Dashboards
 # ---------------------------------------------------------
 
 @app.get("/owner-dashboard", tags=["UI"])
-def serve_owner_dashboard(request: Request, current_user = Depends(get_current_owner)):
+def serve_owner_dashboard(request: Request, user=Depends(get_optional_user)):
+    # Owners only — employees land on their own dashboard
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if user["role"] != "owner":
+        return RedirectResponse(url="/employee-dashboard", status_code=302)
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"request": request, "user": current_user}
+        context={"request": request, "user": user}
     )
 
 @app.get("/employee-dashboard", tags=["UI"])
-def serve_employee_dashboard(request: Request, current_user = Depends(get_current_employee)):
+def serve_employee_dashboard(request: Request, user=Depends(get_optional_user)):
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if user["role"] == "owner":
+        return RedirectResponse(url="/owner-dashboard", status_code=302)
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"request": request, "user": current_user}
+        context={"request": request, "user": user}
     )
