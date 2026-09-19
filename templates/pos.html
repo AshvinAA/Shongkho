@@ -53,12 +53,17 @@
                 <div class="mb-3">
                     <label class="form-label">Phone Number</label>
                     <input type="text" id="customer-phone" class="form-control" placeholder="017..." onblur="checkCustomer()">
+                    <div class="form-text">New number? Just type a name and press + to quick-add.</div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Customer Name</label>
-                    <input type="text" id="customer-name" class="form-control" placeholder="Enter name">
+                    <div class="input-group">
+                        <input type="text" id="customer-name" class="form-control" placeholder="Enter name">
+                        <button class="btn btn-outline-success" onclick="quickAddCustomer()">+</button>
+                    </div>
                 </div>
                 <input type="hidden" id="customer-id">
+                <div id="customer-status" class="small text-muted"></div>
             </div>
         </div>
 
@@ -90,22 +95,20 @@
 <script>
     // --- CART LOGIC ---
     let cart = [];
-    
+
     function addItemToCart() {
         const productId = parseInt(document.getElementById('add-product-id').value);
         const qty = parseInt(document.getElementById('add-qty').value);
-        
+
         if (!productId || isNaN(qty) || qty <= 0) return;
 
-        // Check if item is already in cart, if so, update qty
         const existingItemIndex = cart.findIndex(item => item.product_id === productId);
         if (existingItemIndex > -1) {
             cart[existingItemIndex].quantity += qty;
         } else {
             cart.push({ product_id: productId, quantity: qty });
         }
-        
-        // Reset inputs and update UI
+
         document.getElementById('add-product-id').value = '';
         document.getElementById('add-qty').value = '1';
         updateCartUI();
@@ -148,18 +151,11 @@
             return;
         }
 
-        // Pull the employee ID directly from LocalStorage
-        const employeeId = localStorage.getItem('user_id');
-        if (!employeeId) {
-            alert("Session error: Employee ID not found. Please log in again.");
-            return;
-        }
-
-        // Construct the payload matching your FastAPI SaleCreate schema
+        // Employee identity now comes from the server session (secure).
+        // employee_id is no longer trusted from the client.
         const payload = {
-            employee_id: parseInt(employeeId),
             customer_id: parseInt(customerId),
-            payment_method: "Cash", // Hardcoding Cash for the beta, can add a dropdown later
+            payment_method: "Cash",
             items: cart
         };
 
@@ -167,6 +163,7 @@
             const response = await fetch('/checkout/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify(payload)
             });
 
@@ -174,12 +171,12 @@
 
             if (response.ok) {
                 alert(`Sale Complete! Transaction ID: #${data.transaction_id}\nTotal Revenue: ৳${data.total_revenue}`);
-                // Clear the cart and UI for the next customer
                 cart = [];
                 updateCartUI();
                 document.getElementById('customer-phone').value = '';
                 document.getElementById('customer-name').value = '';
                 document.getElementById('customer-id').value = '';
+                document.getElementById('customer-status').innerText = '';
             } else {
                 alert("Checkout failed: " + (data.detail || "Unknown error"));
             }
@@ -189,23 +186,25 @@
         }
     }
 
-    // --- CUSTOMER LOOKUP LOGIC (Retained from your original) ---
+    // --- CUSTOMER LOOKUP / QUICK-ADD ---
     let existingCustomerData = null;
     const modal = new bootstrap.Modal(document.getElementById('customerModal'));
 
     async function checkCustomer() {
-        const phone = document.getElementById('customer-phone').value;
+        const phone = document.getElementById('customer-phone').value.trim();
         const currentNameInput = document.getElementById('customer-name').value;
-        
+        const status = document.getElementById('customer-status');
+
         if (phone.length < 10) return;
 
         try {
-            const response = await fetch(`/customers/phone/${phone}`);
+            const response = await fetch(`/customers/phone/${phone}`, { credentials: 'same-origin' });
             if (response.ok) {
                 const customer = await response.json();
                 existingCustomerData = customer;
                 document.getElementById('customer-id').value = customer.customer_id;
-                
+                status.innerHTML = `✅ Existing customer: <strong>${customer.name}</strong> (#${customer.customer_id})`;
+
                 if (currentNameInput && currentNameInput.toLowerCase() !== customer.name.toLowerCase()) {
                     document.getElementById('existing-name-display').innerText = customer.name;
                     document.getElementById('new-name-display').innerText = currentNameInput;
@@ -213,9 +212,41 @@
                 } else {
                     document.getElementById('customer-name').value = customer.name;
                 }
+            } else if (response.status === 404) {
+                existingCustomerData = null;
+                document.getElementById('customer-id').value = '';
+                status.innerHTML = `🆕 New customer — enter a name and press <strong>+</strong> to quick-add.`;
             }
         } catch (error) {
             existingCustomerData = null;
+        }
+    }
+
+    async function quickAddCustomer() {
+        const phone = document.getElementById('customer-phone').value.trim();
+        const name = document.getElementById('customer-name').value.trim();
+        const status = document.getElementById('customer-status');
+
+        if (!phone || phone.length < 10) { alert("Enter the customer's phone number first."); return; }
+        if (!name) { alert("Enter the customer's name to quick-add."); return; }
+
+        try {
+            const response = await fetch('/customers/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ name: name, phone_number: phone })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                document.getElementById('customer-id').value = data.customer_id;
+                existingCustomerData = data;
+                status.innerHTML = `✅ Customer created: <strong>${data.name}</strong> (#${data.customer_id})`;
+            } else {
+                alert("Error: " + data.detail);
+            }
+        } catch (error) {
+            alert("Could not connect to server.");
         }
     }
 
@@ -231,6 +262,7 @@
         await fetch(`/customers/${customerId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ name: newName })
         });
         modal.hide();

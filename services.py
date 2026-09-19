@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import or_, func
+from datetime import date, timedelta, datetime
 import bcrypt  # type: ignore
 import models
 import schemas
@@ -37,27 +38,54 @@ def authenticate_user(db: Session, phone_number: str, password: str):
 # USER & AUTH SERVICES
 # ---------------------------------------------------------
 
-def register_user(db: Session, user_data: schemas.EmployeeCreate):
+def register_user(db: Session, user_data: schemas.EmployeeCreate, creator_role: str = None):
+    """
+    Register a new account.
+
+    Rules:
+      - Owner signup: allowed publicly (first owner creates the store),
+        but if any owner already exists the caller must be a logged-in owner.
+      - Employee signup: MUST provide a valid employer_id of an existing owner.
+    """
     # 1. Check if phone number is registered
     existing_user = db.query(models.User).filter(models.User.phone_number == user_data.phone_number).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="This phone number is already registered.")
 
-    # 2. Hash raw password
-    hashed_pwd = hash_password(user_data.password)
-    role = getattr(user_data, 'role', getattr(user_data, 'user_type', 'employee')).lower()
+    role = (user_data.role or 'employee').lower()
 
-    # 3. Instantiate using model field names (`password` instead of `password_hash`)
     if role == 'owner':
+        # Only owners may create additional owner accounts once one exists
+        any_owner_exists = db.query(models.Owner).first() is not None
+        if any_owner_exists and creator_role != 'owner':
+            raise HTTPException(
+                status_code=403,
+                detail="An owner already exists. Only an owner can register another owner account."
+            )
+        hashed_pwd = hash_password(user_data.password)
         new_user = models.Owner(
             name=user_data.name,
             phone_number=user_data.phone_number,
             password=hashed_pwd,
             address=getattr(user_data, 'address', None),
             photo=getattr(user_data, 'photo', None),
-            store_name=getattr(user_data, 'store_name', None)
         )
     else:
+        # Employees must register under an existing owner
+        employer_id = getattr(user_data, 'employer_id', None)
+        if not employer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Employees must register with an existing owner ID (employer_id)."
+            )
+        owner = db.query(models.Owner).filter(models.Owner.user_id == employer_id).first()
+        if not owner:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Owner ID {employer_id} does not exist. Ask your store owner for their ID."
+            )
+
+        hashed_pwd = hash_password(user_data.password)
         new_user = models.Employee(
             name=user_data.name,
             phone_number=user_data.phone_number,
@@ -66,13 +94,106 @@ def register_user(db: Session, user_data: schemas.EmployeeCreate):
             photo=getattr(user_data, 'photo', None),
             position=getattr(user_data, 'position', None),
             salary=getattr(user_data, 'salary', None),
-            employer_id=getattr(user_data, 'employer_id', None)
+            employer_id=employer_id
         )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
+
+
+def reset_password_request(db: Session, phone_number: str):
+    """Check the account exists for password reset. (No email/SMS in this build.)"""
+    user = db.query(models.User).filter(models.User.phone_number == phone_number).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that phone number.")
+    return {"detail": f"Account found for {user.name}. You may now set a new password."}
+
+
+def reset_password_confirm(db: Session, phone_number: str, new_password: str):
+    """Set a new password for the account (shared by owner/employee)."""
+    user = db.query(models.User).filter(models.User.phone_number == phone_number).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that phone number.")
+
+    user.password = hash_password(new_password)
+    db.commit()
+    return {"detail": "Password reset successful. You can now log in."}
+
+
+def update_employee(db: Session, employee_user_id: int, updates: schemas.EmployeeUpdate):
+    """Owner-only: update employee info and/or role."""
+    user = db.query(models.User).filter(models.User.user_id == employee_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    data = updates.model_dump(exclude_unset=True)
+
+    new_role = data.pop("role", None)
+    if new_role:
+        new_role = new_role.lower()
+        if new_role == user.user_type:
+            pass  # no-op
+        elif new_role == "owner":
+            # Promote employee -> owner
+            if user.user_type != "employee":
+                raise HTTPException(status_code=400, detail="User is already an owner")
+            db.delete(user)
+            db.flush()
+            new_owner = models.Owner(
+                user_id=user.user_id,
+                name=user.name,
+                phone_number=user.phone_number,
+                password=user.password,
+                address=user.address,
+                photo=user.photo,
+            )
+            db.add(new_owner)
+        elif new_role == "employee":
+            if user.user_type != "owner":
+                raise HTTPException(status_code=400, detail="User is already an employee")
+            db.delete(user)
+            db.flush()
+            new_emp = models.Employee(
+                user_id=user.user_id,
+                name=user.name,
+                phone_number=user.phone_number,
+                password=user.password,
+                address=user.address,
+                photo=user.photo,
+                position=data.pop("position", None),
+                salary=data.pop("salary", None),
+            )
+            db.add(new_emp)
+        else:
+            raise HTTPException(status_code=400, detail="Role must be 'owner' or 'employee'")
+
+    # Apply plain column updates
+    for field in ("name", "phone_number", "position", "salary"):
+        if field in data and data[field] is not None:
+            setattr(user, field, data[field])
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def delete_employee(db: Session, employee_user_id: int):
+    """Owner-only: remove an employee account."""
+    user = db.query(models.User).filter(models.User.user_id == employee_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if user.user_type == "owner":
+        raise HTTPException(status_code=400, detail="Cannot delete an owner account")
+
+    # Detach past sales so they survive the employee deletion
+    db.query(models.Sale).filter(models.Sale.employee_id == employee_user_id).update(
+        {models.Sale.employee_id: None}
+    )
+    db.delete(user)
+    db.commit()
+    return {"detail": f"Employee {user.name} deleted"}
 
 def process_login(db: Session, user_credentials: schemas.UserLogin):
     # 1. Check DB and password hash
@@ -100,7 +221,7 @@ def create_product(db: Session, product: schemas.ProductCreate):
         product_name=product.product_name,
         cost_price=product.cost_price,
         retail_price=product.retail_price,
-        stock_quantity=product.stock_quantity,  # Add this line
+        stock_quantity=product.stock_quantity,
         category=getattr(product, 'category', None),
         supplier_name=getattr(product, 'supplier_name', None)
     )
@@ -108,8 +229,15 @@ def create_product(db: Session, product: schemas.ProductCreate):
     db.commit()
     db.refresh(db_product)
     return db_product
+
 def get_products(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Product).offset(skip).limit(limit).all()
+
+def get_product(db: Session, product_id: int):
+    product = db.query(models.Product).filter(models.Product.product_id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return product
 
 def search_products(db: Session, search_term: str):
     return db.query(models.Product).filter(
@@ -118,6 +246,42 @@ def search_products(db: Session, search_term: str):
             models.Product.category.icontains(search_term)
         )
     ).all()
+
+def update_product(db: Session, product_id: int, updates: schemas.ProductUpdate):
+    """Owner-only: edit product details."""
+    product = get_product(db, product_id)
+    data = updates.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(product, field, value)
+    db.commit()
+    db.refresh(product)
+    return product
+
+def delete_product(db: Session, product_id: int):
+    """Owner-only: remove a product from inventory."""
+    product = get_product(db, product_id)
+    if product.sale_items:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete a product that has sales recorded. Set stock to 0 instead."
+        )
+    db.delete(product)
+    db.commit()
+    return {"detail": f"Product '{product.product_name}' deleted"}
+
+def update_stock(db: Session, product_id: int, quantity_change: int):
+    """Owner-only: adjust stock up/down by a delta."""
+    product = get_product(db, product_id)
+    new_quantity = product.stock_quantity + quantity_change
+    if new_quantity < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stock cannot go negative. Current: {product.stock_quantity}, Change: {quantity_change}"
+        )
+    product.stock_quantity = new_quantity
+    db.commit()
+    db.refresh(product)
+    return product
     
 
 # ---------------------------------------------------------
@@ -177,14 +341,37 @@ def update_customer_name(db: Session, customer_id: int, new_name: str):
 def get_customer_sales(db: Session, customer_id: int):
     return db.query(models.Sale).filter(models.Sale.customer_id == customer_id).all()
 
+def get_customers_with_spend(db: Session, skip: int = 0, limit: int = 100):
+    """Customer directory with lifetime spend (owner view)."""
+    customers = get_customers(db, skip=skip, limit=limit)
+    result = []
+    for c in customers:
+        total = db.query(func.coalesce(func.sum(models.Sale.total_revenue), 0.0)).filter(
+            models.Sale.customer_id == c.customer_id
+        ).scalar()
+        result.append({
+            "customer_id": c.customer_id,
+            "name": c.name,
+            "phone_number": c.phone_number,
+            "total_spend": float(total)
+        })
+    return result
+
 # ---------------------------------------------------------
 # CHECKOUT / SALE LOGIC
 # ---------------------------------------------------------
 
-def create_sale(db: Session, sale_data: schemas.SaleCreate):
-    # 1. Initialize the Sale record
+def create_sale(db: Session, sale_data: schemas.SaleCreate, current_user: dict = None):
+    # 1. Employee identity comes from the session, not the request body (security)
+    employee_id = sale_data.employee_id
+    if current_user is not None:
+        employee_id = current_user["id"]
+    elif not employee_id:
+        raise HTTPException(status_code=401, detail="Login required to check out")
+
+    # 2. Initialize the Sale record
     db_sale = models.Sale(
-        employee_id=sale_data.employee_id,
+        employee_id=employee_id,
         customer_id=sale_data.customer_id,
         payment_method=sale_data.payment_method,
         total_revenue=0.0,
@@ -233,9 +420,99 @@ def create_sale(db: Session, sale_data: schemas.SaleCreate):
     db_sale.total_revenue = total_calculated_revenue
     db_sale.total_profit = total_calculated_profit
     
-    # 8. Save everything to TiDB
+    # 9. Save everything to TiDB
     db.add(db_sale)
     db.commit()
     db.refresh(db_sale)
     
     return db_sale
+
+
+# ---------------------------------------------------------
+# SALES LISTING, RECEIPTS & REPORTS
+# ---------------------------------------------------------
+
+def get_sales(db: Session, current_user: dict, skip: int = 0, limit: int = 100):
+    """Owner sees every transaction; employees only see their own."""
+    query = db.query(models.Sale)
+    if current_user["role"] != "owner":
+        query = query.filter(models.Sale.employee_id == current_user["id"])
+    return query.order_by(models.Sale.transaction_id.desc()).offset(skip).limit(limit).all()
+
+
+def get_sale_receipt(db: Session, transaction_id: int):
+    """Full receipt data for one transaction."""
+    sale = db.query(models.Sale).filter(models.Sale.transaction_id == transaction_id).first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    items = []
+    for item in sale.items:
+        product = db.query(models.Product).filter(models.Product.product_id == item.product_id).first()
+        items.append({
+            "product_id": item.product_id,
+            "product_name": product.product_name if product else f"Product #{item.product_id}",
+            "quantity": item.quantity,
+            "unit_price": item.retail_price_at_sale,
+            "line_total": item.retail_price_at_sale * item.quantity
+        })
+
+    return {
+        "transaction_id": sale.transaction_id,
+        "employee_id": sale.employee_id,
+        "date": sale.date,
+        "time": sale.time,
+        "payment_method": sale.payment_method,
+        "total_revenue": sale.total_revenue,
+        "employee_name": sale.employee.name if sale.employee else "(deleted employee)",
+        "customer_name": sale.customer.name if sale.customer else "Walk-in",
+        "items": items
+    }
+
+
+def get_sales_report(db: Session, period: str):
+    """Owner-only: totals for daily / weekly / monthly periods."""
+    today = date.today()
+    periods = {
+        "daily": today,
+        "weekly": today - timedelta(days=7),
+        "monthly": today - timedelta(days=30),
+    }
+    if period not in periods:
+        raise HTTPException(status_code=400, detail="Period must be 'daily', 'weekly' or 'monthly'")
+
+    start_date = periods[period]
+    rows = db.query(
+        func.coalesce(func.sum(models.Sale.total_revenue), 0.0),
+        func.coalesce(func.sum(models.Sale.total_profit), 0.0),
+        func.count(models.Sale.transaction_id)
+    ).filter(models.Sale.date >= start_date).one()
+
+    return {
+        "period": period,
+        "start_date": start_date,
+        "end_date": today,
+        "total_revenue": float(rows[0]),
+        "total_profit": float(rows[1]),
+        "total_transactions": rows[2]
+    }
+
+
+def get_sales_performance(db: Session, skip: int = 0, limit: int = 100):
+    """Owner-only: revenue/profit per employee across all time."""
+    employees = db.query(models.Employee).offset(skip).limit(limit).all()
+    result = []
+    for emp in employees:
+        totals = db.query(
+            func.count(models.Sale.transaction_id),
+            func.coalesce(func.sum(models.Sale.total_revenue), 0.0),
+            func.coalesce(func.sum(models.Sale.total_profit), 0.0)
+        ).filter(models.Sale.employee_id == emp.user_id).one()
+        result.append({
+            "employee_id": emp.user_id,
+            "employee_name": emp.name,
+            "total_sales": totals[0],
+            "total_revenue": float(totals[1]),
+            "total_profit": float(totals[2])
+        })
+    return result

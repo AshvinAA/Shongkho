@@ -60,7 +60,8 @@ class Employee(User):
         primaryjoin="Owner.user_id == Employee.employer_id", # <--- Forces the exact join
         back_populates="employees"
     )
-    sales = relationship("Sale", back_populates="employee")
+    # Sales processed by this employee (Sale.employee is a plain User relationship)
+    sales = relationship("Sale", primaryjoin="Employee.user_id == Sale.employee_id", foreign_keys="Sale.employee_id")
 
     __mapper_args__ = {
         'polymorphic_identity': 'employee'
@@ -117,11 +118,12 @@ class Sale(Base):
     total_profit = Column(Float, default=0.0)
     
     # Foreign Keys
-    employee_id = Column(Integer, ForeignKey('employees.user_id'))
+    # Points at users.user_id so BOTH owners and employees can process sales
+    employee_id = Column(Integer, ForeignKey('users.user_id'), nullable=True)
     customer_id = Column(Integer, ForeignKey('customers.customer_id'))
 
     # ORM Relationships
-    employee = relationship("Employee", back_populates="sales")
+    employee = relationship("User", foreign_keys=[employee_id], viewonly=True)
     customer = relationship("Customer", back_populates="sales")
     items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
     

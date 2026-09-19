@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row">
-    <!-- Search Section -->
+    <!-- Directory / Search Section -->
     <div class="col-md-4">
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-primary text-white">
@@ -22,9 +22,29 @@
                 <h6 class="fw-bold">Profile Details</h6>
                 <p class="mb-1">Name: <span id="profile-name" class="text-muted">---</span></p>
                 <p class="mb-1">Phone: <span id="profile-phone" class="text-muted">---</span></p>
+                <p class="mb-1">ID: <span id="profile-id" class="text-muted">---</span></p>
                 <button class="btn btn-sm btn-secondary w-100 mt-2" onclick="loadHistory()">View Purchase History</button>
             </div>
         </div>
+
+        {% if user.role == 'owner' %}
+        <!-- Owner-only: full customer directory with lifetime spend -->
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold">All Customers (Lifetime Spend)</h6>
+            </div>
+            <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Name</th><th>Phone</th><th>Total Spend</th></tr>
+                    </thead>
+                    <tbody id="directory-body">
+                        <tr><td colspan="3" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- History Section -->
@@ -54,3 +74,92 @@
 <input type="hidden" id="current-customer-id">
 {% endblock %}
 
+{% block scripts %}
+<script>
+    const IS_OWNER = window.APP_USER.role === 'owner';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (IS_OWNER) loadDirectory();
+    });
+
+    // Owner-only: full directory with lifetime spend
+    async function loadDirectory() {
+        const tbody = document.getElementById('directory-body');
+        try {
+            const r = await fetch('/customers/', { credentials: 'same-origin' });
+            const customers = await r.json();
+            tbody.innerHTML = '';
+            if (!Array.isArray(customers) || customers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-3">No customers yet.</td></tr>`;
+                return;
+            }
+            customers.forEach(c => {
+                tbody.innerHTML += `
+                    <tr style="cursor:pointer;" onclick="pickCustomer('${c.phone_number}', ${c.customer_id}, '${c.name}')">
+                        <td class="fw-bold">${c.name}</td>
+                        <td>${c.phone_number}</td>
+                        <td class="text-success fw-bold">৳${Number(c.total_spend).toFixed(2)}</td>
+                    </tr>`;
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="3" class="text-center text-danger py-3">Failed to load.</td></tr>`;
+        }
+    }
+
+    function pickCustomer(phone, id, name) {
+        document.getElementById('search-phone').value = phone;
+        document.getElementById('profile-name').innerText = name;
+        document.getElementById('profile-phone').innerText = phone;
+        document.getElementById('profile-id').innerText = '#' + id;
+        document.getElementById('current-customer-id').value = id;
+        loadHistory();
+    }
+
+    async function searchCustomer() {
+        const phone = document.getElementById('search-phone').value.trim();
+        if (!phone) return;
+
+        try {
+            const r = await fetch(`/customers/phone/${phone}`, { credentials: 'same-origin' });
+            const data = await r.json();
+            if (r.ok) {
+                document.getElementById('profile-name').innerText = data.name;
+                document.getElementById('profile-phone').innerText = data.phone_number;
+                document.getElementById('profile-id').innerText = '#' + data.customer_id;
+                document.getElementById('current-customer-id').value = data.customer_id;
+            } else {
+                alert(data.detail || "Customer not found");
+            }
+        } catch (e) {
+            alert("Search failed.");
+        }
+    }
+
+    async function loadHistory() {
+        const customerId = document.getElementById('current-customer-id').value;
+        const tbody = document.getElementById('history-body');
+        if (!customerId) { alert("Select a customer first."); return; }
+
+        try {
+            const r = await fetch(`/customers/${customerId}/history`, { credentials: 'same-origin' });
+            const sales = await r.json();
+            tbody.innerHTML = '';
+            if (!r.ok || sales.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">No purchase history found.</td></tr>`;
+                return;
+            }
+            sales.forEach(s => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${s.date}</td>
+                        <td>#${s.transaction_id}</td>
+                        <td class="fw-bold">৳${Number(s.total_revenue).toFixed(2)}</td>
+                        <td>${s.payment_method}</td>
+                    </tr>`;
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4">Failed to load history.</td></tr>`;
+        }
+    }
+</script>
+{% endblock %}
