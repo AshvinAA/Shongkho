@@ -49,9 +49,12 @@
       </nav>
 
       <div class="d-flex align-items-center gap-3">
-        <div class="avatar-circle" style="background-color: #e0e7ff; color: #3730a3;">
-          {{ user.name[:2].upper() }}
-        </div>
+        <a href="#" onclick="openEditProfile(event)" title="Edit profile">
+          <img id="nav-avatar-img" src="" alt="" class="avatar-circle border" style="object-fit: cover; background-color: #e0e7ff; color: #3730a3; display:none; cursor:pointer;">
+          <div id="nav-avatar-fallback" class="avatar-circle" style="background-color: #e0e7ff; color: #3730a3; cursor:pointer;">
+            {{ user.name[:2].upper() }}
+          </div>
+        </a>
         <span class="fs-14 text-muted d-none d-md-inline">{{ user.name }} ({{ user.role }})</span>
         <button class="btn btn-outline-danger btn-sm" onclick="logoutUser()">Logout</button>
       </div>
@@ -141,8 +144,168 @@
 
   </main>
 
+  <!-- ================= EDIT PROFILE MODAL (both roles) ================= -->
+  <div class="modal fade" id="editProfileModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <img id="profile-photo-preview" src="" alt="Profile photo" class="rounded-circle border mb-3" style="width:110px; height:110px; object-fit:cover; display:none;">
+          <div id="profile-photo-fallback" class="rounded-circle border mb-3 d-flex align-items-center justify-content-center mx-auto" style="width:110px; height:110px; background:#e0e7ff; color:#3730a3; font-size:2rem; font-weight:600;">
+            {{ user.name[:2].upper() }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label d-block">Profile Picture</label>
+            <input type="file" id="profile-photo-input" class="form-control" accept="image/png,image/jpeg,image/webp,image/gif" onchange="uploadProfilePhoto()">
+            <div class="form-text">JPG, PNG, WEBP or GIF — max 2 MB.</div>
+          </div>
+          <div class="mb-2 text-start">
+            <label class="form-label">Name</label>
+            <input type="text" id="profile-name-input" class="form-control">
+          </div>
+          <div class="mb-2 text-start">
+            <label class="form-label">Phone Number</label>
+            <input type="text" id="profile-phone-input" class="form-control" placeholder="017...">
+            <div id="profile-phone-hint" class="form-text">Used for login — keep it safe.</div>
+          </div>
+          <div class="text-start text-muted small">Signed in as {{ user.name }} ({{ user.role }})</div>
+          <button class="btn btn-primary w-100 mt-2" onclick="saveProfileChanges()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    // -------- EDIT PROFILE (both owners and employees) --------
+    let myPhotoUrl = null;
+
+    async function loadMyProfile() {
+      try {
+        const r = await fetch('/employees/me/profile', { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const me = await r.json();
+        myPhotoUrl = me.photo || null;
+        applyAvatar(myPhotoUrl);
+        const nameInput = document.getElementById('profile-name-input');
+        if (nameInput) nameInput.value = me.name || '';
+        const phoneInput = document.getElementById('profile-phone-input');
+        if (phoneInput) phoneInput.value = me.phone_number || '';
+      } catch (e) { /* avatar stays as initials */ }
+    }
+
+    function applyAvatar(url) {
+      const img = document.getElementById('nav-avatar-img');
+      const fallback = document.getElementById('nav-avatar-fallback');
+      if (url) {
+        img.src = url;
+        img.style.display = 'inline-flex';
+        fallback.style.display = 'none';
+      } else {
+        img.style.display = 'none';
+        fallback.style.display = 'inline-flex';
+      }
+      const preview = document.getElementById('profile-photo-preview');
+      const previewFallback = document.getElementById('profile-photo-fallback');
+      if (preview && previewFallback) {
+        if (url) {
+          preview.src = url;
+          preview.style.display = 'block';
+          previewFallback.style.display = 'none';
+        } else {
+          preview.style.display = 'none';
+          previewFallback.style.display = 'flex';
+        }
+      }
+    }
+
+    function openEditProfile(e) {
+      if (e) e.preventDefault();
+      new bootstrap.Modal(document.getElementById('editProfileModal')).show();
+    }
+
+    async function uploadProfilePhoto() {
+      const input = document.getElementById('profile-photo-input');
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const r = await fetch('/employees/me/profile/photo', {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: formData
+        });
+        const data = await r.json();
+        if (r.ok) {
+          myPhotoUrl = data.photo;
+          applyAvatar(myPhotoUrl);
+          localStorage.setItem('photo', myPhotoUrl);
+          input.value = '';
+          alert('Profile picture updated!');
+        } else {
+          alert('Upload failed: ' + (data.detail || 'unknown error'));
+        }
+      } catch (e) {
+        alert('Could not upload the image.');
+      }
+    }
+
+    async function saveProfileChanges() {
+      const name = document.getElementById('profile-name-input').value.trim();
+      const phone = document.getElementById('profile-phone-input').value.trim();
+      const hint = document.getElementById('profile-phone-hint');
+
+      if (!name) { alert('Name cannot be empty.'); return; }
+      const digits = phone.replace(/[^0-9]/g, '');
+      if (digits.length < 10 || digits.length > 15) {
+        hint.textContent = '❌ Phone must be 10-15 digits (e.g. 01712345678).';
+        hint.classList.replace('form-text', 'text-danger');
+        return;
+      }
+
+      try {
+        const r = await fetch('/employees/me/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ name: name, phone_number: phone })
+        });
+        const data = await r.json();
+        if (r.ok) {
+          localStorage.setItem('name', data.name);
+          bootstrap.Modal.getInstance(document.getElementById('editProfileModal')).hide();
+          window.location.reload();
+        } else {
+          hint.textContent = '❌ ' + (data.detail || 'Could not save.');
+          hint.classList.replace('form-text', 'text-danger');
+        }
+      } catch (e) {
+        hint.textContent = '❌ Could not connect to the server.';
+        hint.classList.replace('form-text', 'text-danger');
+      }
+    }
+
+    document.getElementById('profile-phone-input').addEventListener('input', (e) => {
+      const hint = document.getElementById('profile-phone-hint');
+      const digits = e.target.value.replace(/[^0-9]/g, '');
+      if (digits.length === 0) {
+        hint.textContent = 'Used for login — keep it safe.';
+        hint.classList.replace('text-danger', 'form-text');
+      } else if (digits.length < 10 || digits.length > 15) {
+        hint.textContent = `❌ ${digits.length} digits — need 10-15.`;
+        hint.classList.replace('form-text', 'text-danger');
+      } else {
+        hint.textContent = '✅ Looks good.';
+        hint.classList.replace('text-danger', 'form-text');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', loadMyProfile);
+
     async function logoutUser() {
       try { await fetch('/auth/logout', { method: 'POST' }); } catch (e) {}
       localStorage.clear();

@@ -169,7 +169,7 @@
             body.innerHTML = `
                 <p class="mb-1"><strong>Date:</strong> ${receipt.date} ${String(receipt.time).slice(0, 8)}</p>
                 <p class="mb-1"><strong>Employee:</strong> ${receipt.employee_name || '—'} &nbsp;|&nbsp; <strong>Customer:</strong> ${receipt.customer_name || 'Walk-in'}</p>
-                <p class="mb-2"><strong>Payment:</strong> ${receipt.payment_method}</p>
+                <p class="mb-2"><strong>Phone:</strong> ${receipt.customer_phone || '—'} &nbsp;|&nbsp; <strong>Payment:</strong> ${receipt.payment_method}</p>
                 <table class="table table-sm">
                     <thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead>
                     <tbody>${itemsHtml}</tbody>

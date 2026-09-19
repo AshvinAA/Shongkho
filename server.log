@@ -1,677 +1,86 @@
-INFO:     Started server process [24928]
+INFO:     Started server process [2180]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:14412 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14414 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:14416 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:14417 - "GET /staff HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:14418 - "GET /owner-dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14420 - "POST /auth/register/employee HTTP/1.1" 201 Created
-INFO:     127.0.0.1:14421 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14422 - "GET /staff HTTP/1.1" 302 Found
-INFO:     127.0.0.1:14423 - "GET /owner-dashboard HTTP/1.1" 302 Found
-INFO:     127.0.0.1:14424 - "GET /employee-dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14425 - "POST /checkout/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14426 - "GET /sales/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8207 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5482 - "GET /login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5482 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:6866 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6866 - "GET /owner-dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1762 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1762 - "GET /sales/reports/daily HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1184 - "GET /sales/reports/monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7583 - "GET /products/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7583 - "GET /staff HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7583 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7583 - "GET /employees/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1184 - "GET /employees/performance HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1184 - "GET /customers-ui HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\sessions.py", line 88, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 1281, in handle
-    await super().handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 280, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "F:\Shongkho\Shongkho\main.py", line 163, in serve_customers
-    return templates.TemplateResponse(request=request, name="customers.html")
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 149, in TemplateResponse
-    return _TemplateResponse(
-        template,
-    ...<4 lines>...
-        background=background,
-    )
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 43, in __init__
-    content = template.render(context)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 1295, in render
-    self.environment.handle_exception()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "templates\customers.html", line 1, in top-level template code
-    {% extends "base.html" %}
-  File "templates\base.html", line 44, in top-level template code
-    {% block content %}{% endblock %}
-    ^^^^^^^^^^^^^^^^^
-  File "templates\customers.html", line 30, in block 'content'
-    {% if user.role == 'owner' %}
-    ^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 490, in getattr
-    return getattr(obj, attribute)
-jinja2.exceptions.UndefinedError: 'user' is undefined
-INFO:     127.0.0.1:14358 - "GET /sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14358 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12359 - "GET /sales/reports/daily HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14358 - "GET /sales/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12359 - "GET /sales/reports/weekly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12359 - "GET /sales/reports/monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12359 - "GET /pos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12359 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12359 - "GET /inventory HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\sessions.py", line 88, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 1281, in handle
-    await super().handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 280, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "F:\Shongkho\Shongkho\main.py", line 159, in serve_products
-    return templates.TemplateResponse(request=request, name="products.html")
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 149, in TemplateResponse
-    return _TemplateResponse(
-        template,
-    ...<4 lines>...
-        background=background,
-    )
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 43, in __init__
-    content = template.render(context)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 1295, in render
-    self.environment.handle_exception()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "templates\products.html", line 1, in top-level template code
-    {% extends "base.html" %}
-  File "templates\base.html", line 44, in top-level template code
-    {% block content %}{% endblock %}
-    ^^^^^^^^^^^^^^^^^
-  File "templates\products.html", line 8, in block 'content'
-    {% if user.role == 'owner' %}
-    ^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 490, in getattr
-    return getattr(obj, attribute)
-jinja2.exceptions.UndefinedError: 'user' is undefined
-INFO:     127.0.0.1:5773 - "GET /pos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5773 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5773 - "GET /sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5773 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1131 - "GET /sales/reports/daily HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5773 - "GET /sales/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1131 - "GET /sales/reports/weekly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1131 - "GET /sales/reports/monthly HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1131 - "GET /customers-ui HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\sessions.py", line 88, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 1281, in handle
-    await super().handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 280, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "F:\Shongkho\Shongkho\main.py", line 163, in serve_customers
-    return templates.TemplateResponse(request=request, name="customers.html")
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 149, in TemplateResponse
-    return _TemplateResponse(
-        template,
-    ...<4 lines>...
-        background=background,
-    )
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 43, in __init__
-    content = template.render(context)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 1295, in render
-    self.environment.handle_exception()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "templates\customers.html", line 1, in top-level template code
-    {% extends "base.html" %}
-  File "templates\base.html", line 44, in top-level template code
-    {% block content %}{% endblock %}
-    ^^^^^^^^^^^^^^^^^
-  File "templates\customers.html", line 30, in block 'content'
-    {% if user.role == 'owner' %}
-    ^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 490, in getattr
-    return getattr(obj, attribute)
-jinja2.exceptions.UndefinedError: 'user' is undefined
-INFO:     127.0.0.1:14203 - "POST /auth/logout HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14203 - "GET /login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14203 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:9472 - "GET /inventory HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\sessions.py", line 88, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 1281, in handle
-    await super().handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 280, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "F:\Shongkho\Shongkho\main.py", line 159, in serve_products
-    return templates.TemplateResponse(request=request, name="products.html")
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 149, in TemplateResponse
-    return _TemplateResponse(
-        template,
-    ...<4 lines>...
-        background=background,
-    )
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 43, in __init__
-    content = template.render(context)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 1295, in render
-    self.environment.handle_exception()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "templates\products.html", line 1, in top-level template code
-    {% extends "base.html" %}
-  File "templates\base.html", line 44, in top-level template code
-    {% block content %}{% endblock %}
-    ^^^^^^^^^^^^^^^^^
-  File "templates\products.html", line 8, in block 'content'
-    {% if user.role == 'owner' %}
-    ^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 490, in getattr
-    return getattr(obj, attribute)
-jinja2.exceptions.UndefinedError: 'user' is undefined
-INFO:     127.0.0.1:11928 - "GET /pos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11928 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:11928 - "GET /login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11928 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:14084 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3186 - "GET /login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3186 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:13383 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:14561 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:8751 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:8751 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:2548 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2548 - "GET /employee-dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2548 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2548 - "GET /sales/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2548 - "GET /inventory HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\sessions.py", line 88, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 1281, in handle
-    await super().handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 280, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "F:\Shongkho\Shongkho\main.py", line 159, in serve_products
-    def serve_pos(request: Request, user=Depends(get_optional_user)):
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 149, in TemplateResponse
-    return _TemplateResponse(
-        template,
-    ...<4 lines>...
-        background=background,
-    )
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 43, in __init__
-    content = template.render(context)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 1295, in render
-    self.environment.handle_exception()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "templates\products.html", line 1, in top-level template code
-    {% extends "base.html" %}
-  File "templates\base.html", line 45, in top-level template code
-    {% block content %}{% endblock %}
-    ^^^^^^^^^^^^^^^^^
-  File "templates\products.html", line 8, in block 'content'
-    {% if user.role == 'owner' %}
-    ^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 490, in getattr
-    return getattr(obj, attribute)
-jinja2.exceptions.UndefinedError: 'user' is undefined
-INFO:     127.0.0.1:8622 - "GET /pos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8622 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8622 - "GET /sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8622 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8622 - "GET /sales/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8622 - "GET /sales/30039/receipt HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8622 - "GET /customers HTTP/1.1" 307 Temporary Redirect
-INFO:     127.0.0.1:8622 - "GET /customers/ HTTP/1.1" 403 Forbidden
-INFO:     127.0.0.1:8622 - "GET /inventory HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        self.scope, self.receive, self.send
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\sessions.py", line 88, in __call__
-    await self.app(scope, receive, send_wrapper)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 1281, in handle
-    await super().handle(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\routing.py", line 280, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-  File "F:\Shongkho\Shongkho\main.py", line 159, in serve_products
-    def serve_pos(request: Request, user=Depends(get_optional_user)):
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 149, in TemplateResponse
-    return _TemplateResponse(
-        template,
-    ...<4 lines>...
-        background=background,
-    )
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\starlette\templating.py", line 43, in __init__
-    content = template.render(context)
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 1295, in render
-    self.environment.handle_exception()
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
-    raise rewrite_traceback_stack(source=source)
-  File "templates\products.html", line 1, in top-level template code
-    {% extends "base.html" %}
-  File "templates\base.html", line 45, in top-level template code
-    {% block content %}{% endblock %}
-    ^^^^^^^^^^^^^^^^^
-  File "templates\products.html", line 8, in block 'content'
-    {% if user.role == 'owner' %}
-    ^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sawmi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\jinja2\environment.py", line 490, in getattr
-    return getattr(obj, attribute)
-jinja2.exceptions.UndefinedError: 'user' is undefined
+INFO:     127.0.0.1:5965 - "GET /employees/me/profile HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:1867 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10537 - "PUT /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10538 - "PUT /employees/me/profile HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:10540 - "PUT /employees/me/profile HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:10544 - "POST /employees/me/profile/photo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10545 - "GET /static/profile_pics/user_60001.png HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10546 - "POST /employees/me/profile/photo HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:8973 - "GET / HTTP/1.1" 302 Found
+INFO:     127.0.0.1:8973 - "GET /employee-dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8973 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14972 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2244 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6808 - "POST /employees/me/profile/photo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6808 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "PUT /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /employee-dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:1805 - "GET /inventory HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:1805 - "GET /products/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET / HTTP/1.1" 302 Found
+INFO:     127.0.0.1:1820 - "GET /employee-dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:1820 - "GET /pos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET / HTTP/1.1" 302 Found
+INFO:     127.0.0.1:1820 - "GET /employee-dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1805 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:3481 - "PUT /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /employee-dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:3481 - "GET /inventory HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /products/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /inventory HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:14932 - "GET /products/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /inventory HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /products/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14932 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:14932 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /customers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3481 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET / HTTP/1.1" 302 Found
+INFO:     127.0.0.1:1190 - "GET /employee-dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8238 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:1190 - "GET /sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET /sales/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8238 - "GET /employees/me/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8238 - "GET /customers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1190 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8238 - "GET /static/profile_pics/user_30003.jpg?v=1789855698 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:8238 - "GET /employees/me/profile HTTP/1.1" 200 OK
