@@ -84,6 +84,15 @@
                     localStorage.setItem('role', data.role);
                     localStorage.setItem('name', data.name);
 
+                    // Cache the profile photo so the navbar avatar shows instantly
+                    try {
+                        const pr = await fetch('/employees/me/profile', { credentials: 'same-origin' });
+                        if (pr.ok) {
+                            const profile = await pr.json();
+                            localStorage.setItem('photo', profile.photo || '');
+                        }
+                    } catch (e) { /* avatar falls back to initials */ }
+
                     // Two types of login — role decides the landing page
                     if (data.role === 'owner') {
                         window.location.href = "/owner-dashboard";
