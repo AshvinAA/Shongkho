@@ -89,9 +89,20 @@ check("GET /auth/me", 200, client.get("/auth/me").status_code)
 owner_sale = checkout()
 check("POST /checkout/", 200, 200)
 check("GET /products/", 200, client.get("/products/").status_code)
+check("GET /products/categories", 200, client.get("/products/categories").status_code)
 check("POST /products/ (owner)", 200, 200)
 check("PATCH /products/{id}/stock", 200, client.patch(
     f"/products/{product.product_id}/stock", json={"quantity_change": 5}).status_code)
+
+# 1x1 transparent PNG for upload tests
+PNG_BYTES = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000d49444154789c626001000000ffff03000006000557bfabd40000000049454e44ae426082"
+)
+check("POST /products/{id}/photo (owner)", 200, client.post(
+    f"/products/{product.product_id}/photo",
+    files={"file": ("test.png", PNG_BYTES, "image/png")}).status_code)
+check("Product photo persisted", True, bool(client.get(f"/products/{product.product_id}").json()["photo"]))
 check("PUT /products/{id} (owner)", 200, client.put(
     f"/products/{product.product_id}", json={"retail_price": 16.0}).status_code)
 check("GET /customers/ (owner)", 200, client.get("/customers/").status_code)
@@ -130,6 +141,9 @@ check("DELETE /products/{id} (employee)", 403,
       client.delete(f"/products/{product.product_id}").status_code)
 check("PATCH /products/{id}/stock (employee)", 403, client.patch(
     f"/products/{product.product_id}/stock", json={"quantity_change": 5}).status_code)
+check("POST /products/{id}/photo (employee)", 403, client.post(
+    f"/products/{product.product_id}/photo",
+    files={"file": ("test.png", PNG_BYTES, "image/png")}).status_code)
 check("GET /customers/ (employee)", 403, client.get("/customers/").status_code)
 check("GET /customers/phone/{phone}", 200,
       client.get(f"/customers/phone/{customer.phone_number}").status_code)

@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+import os
+import time
+import models
 import schemas
 import services
 import deps
 from database import get_db
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 
 
 @router.post("/", response_model=schemas.ProductResponse)
@@ -40,6 +45,17 @@ def search_products(
     if not results:
         raise HTTPException(status_code=404, detail="No products found matching that search.")
     return results
+
+
+@router.get("/categories", response_model=List[str])
+def get_categories(
+    current_user=Depends(deps.require_any),     # both roles
+    db: Session = Depends(get_db),
+):
+    """Distinct category names already used by products (for autocomplete)."""
+    rows = db.query(models.Product.category).filter(models.Product.category.isnot(None)).distinct().all()
+    categories = sorted({(row[0] or "").strip() for row in rows if row[0] and row[0].strip()})
+    return categories
 
 
 @router.get("/{product_id}", response_model=schemas.ProductResponse)
@@ -82,3 +98,43 @@ def update_stock(
 ):
     """Owner-only: update stock (+/-)."""
     return services.update_stock(db=db, product_id=product_id, quantity_change=payload.quantity_change)
+
+
+@router.post("/{product_id}/photo", response_model=schemas.ProductResponse)
+def upload_product_photo(
+    product_id: int,
+    file: UploadFile = File(...),
+    current_user=Depends(deps.require_owner),   # OWNER ONLY
+    db: Session = Depends(get_db),
+):
+    """Owner-only: upload (or replace) the product picture."""
+    product = services.get_product(db=db, product_id=product_id)
+
+    ext = ALLOWED_IMAGE_TYPES.get(file.content_type)
+    if not ext:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP or GIF images are allowed.")
+
+    contents = file.file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 5 MB).")
+
+    upload_dir = os.path.join("static", "product_pics")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Remove the previous picture (only files we manage)
+    if product.photo and product.photo.startswith("/static/product_pics/"):
+        old_path = product.photo.split("?")[0].lstrip("/")
+        if os.path.isfile(old_path):
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+    filename = f"product_{product_id}{ext}"
+    file_path = os.path.join(upload_dir, filename)
+    with open(file_path, "wb") as out:
+        out.write(contents)
+
+    # Cache-busting version so browsers refresh the image after an edit
+    updates = schemas.ProductUpdate(photo=f"/static/product_pics/{filename}?v={int(time.time())}")
+    return services.update_product(db=db, product_id=product_id, updates=updates)
