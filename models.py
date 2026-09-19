@@ -95,6 +95,7 @@ class Product(Base):
     
     category = Column(String(100))
     supplier_name = Column(String(255))
+    photo = Column(String(550))
     date = Column(Date, default=date.today)
 
     sale_items = relationship("SaleItem", back_populates="product")

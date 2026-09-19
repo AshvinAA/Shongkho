@@ -14,26 +14,25 @@ import services
 
 random.seed(42)  # reproducible demo data
 
-OWNER = {"name": "Rahim Store Owner", "phone_number": "01700000001", "password": "owner123"}
+OWNER = {"name": "edwin", "phone_number": "1234567890", "password": "owner123"}
 
 EMPLOYEES = [
-    {"name": "Karim Uddin", "phone_number": "01700000002", "password": "emp123", "position": "Cashier", "salary": 15000},
-    {"name": "Sadia Islam", "phone_number": "01700000003", "password": "emp123", "position": "Sales Associate", "salary": 13000},
+    {"name": "adlin", "phone_number": "0987654321", "password": "emp123", "position": "Cashier", "salary": 15000},
 ]
 
 PRODUCTS = [
-    {"product_name": "Pran Chola Dal 1kg",      "cost_price": 95.0,  "retail_price": 120.0, "stock_quantity": 60,  "category": "Grocery",     "supplier_name": "Pran-RFL"},
-    {"product_name": "Miniket Rice 5kg",        "cost_price": 340.0, "retail_price": 410.0, "stock_quantity": 35,  "category": "Grocery",     "supplier_name": "City Group"},
-    {"product_name": "Teer Soybean Oil 1L",     "cost_price": 150.0, "retail_price": 175.0, "stock_quantity": 48,  "category": "Grocery",     "supplier_name": "City Group"},
-    {"product_name": "Fresh Sugar 1kg",         "cost_price": 105.0, "retail_price": 130.0, "stock_quantity": 40,  "category": "Grocery",     "supplier_name": "Fresh Foods"},
-    {"product_name": "Coca-Cola 1.25L",         "cost_price": 75.0,  "retail_price": 90.0,  "stock_quantity": 72,  "category": "Beverages",   "supplier_name": "CBC Distributors"},
-    {"product_name": "Pran Mango Juice 1L",     "cost_price": 95.0,  "retail_price": 115.0, "stock_quantity": 30,  "category": "Beverages",   "supplier_name": "Pran-RFL"},
-    {"product_name": "Fu Wang Noodles 4-pack",  "cost_price": 55.0,  "retail_price": 70.0,  "stock_quantity": 80,  "category": "Snacks",      "supplier_name": "Fu-Wang"},
-    {"product_name": "Mr. Twist Chips",         "cost_price": 12.0,  "retail_price": 20.0,  "stock_quantity": 120, "category": "Snacks",      "supplier_name": "Pran-RFL"},
-    {"product_name": "Lux Soap 100g",           "cost_price": 45.0,  "retail_price": 60.0,  "stock_quantity": 65,  "category": "Care",        "supplier_name": "Unilever"},
-    {"product_name": "Closeup Toothpaste 100g", "cost_price": 110.0, "retail_price": 140.0, "stock_quantity": 45,  "category": "Care",        "supplier_name": "Unilever"},
-    {"product_name": "Harpic Toilet Cleaner",   "cost_price": 130.0, "retail_price": 160.0, "stock_quantity": 4,   "category": "Household",   "supplier_name": "Reckitt"},
-    {"product_name": "Fresh Milk Powder 500g",  "cost_price": 320.0, "retail_price": 375.0, "stock_quantity": 3,   "category": "Grocery",     "supplier_name": "Fresh Foods"},
+    {"product_name": "Samsung Galaxy A15 5G",    "cost_price": 21000.0, "retail_price": 24500.0, "stock_quantity": 12,  "category": "Phones",        "supplier_name": "Samsung Distributors"},
+    {"product_name": "Xiaomi Redmi 13C",         "cost_price": 14000.0, "retail_price": 16500.0, "stock_quantity": 18,  "category": "Phones",        "supplier_name": "Xiaomi BD"},
+    {"product_name": "iPhone 13 (128GB)",        "cost_price": 78000.0, "retail_price": 86000.0, "stock_quantity": 5,   "category": "Phones",        "supplier_name": "Apple Authorised"},
+    {"product_name": "Realme C67",               "cost_price": 17500.0, "retail_price": 19900.0, "stock_quantity": 9,   "category": "Phones",        "supplier_name": "Realme BD"},
+    {"product_name": "Anker 20000mAh Power Bank", "cost_price": 2800.0,  "retail_price": 3500.0,  "stock_quantity": 25,  "category": "Accessories",   "supplier_name": "Anker BD"},
+    {"product_name": "USB-C Fast Charger 33W",   "cost_price": 750.0,   "retail_price": 1100.0,  "stock_quantity": 40,  "category": "Accessories",   "supplier_name": "Baseus BD"},
+    {"product_name": "JBL Tune 520BT Headphones", "cost_price": 4200.0,  "retail_price": 5200.0,  "stock_quantity": 15,  "category": "Audio",         "supplier_name": "JBL BD"},
+    {"product_name": "Xiaomi Redmi Buds 4 Lite", "cost_price": 1800.0,  "retail_price": 2400.0,  "stock_quantity": 22,  "category": "Audio",         "supplier_name": "Xiaomi BD"},
+    {"product_name": "Grameenphone 100tk Recharge", "cost_price": 96.0, "retail_price": 100.0,   "stock_quantity": 200, "category": "Recharge",      "supplier_name": "GP Load"},
+    {"product_name": "Robi 200tk Flexiload",     "cost_price": 194.0,   "retail_price": 200.0,   "stock_quantity": 150, "category": "Recharge",      "supplier_name": "Robi Load"},
+    {"product_name": "Airtel 1GB Data Pack",     "cost_price": 95.0,    "retail_price": 109.0,   "stock_quantity": 300, "category": "Recharge",      "supplier_name": "Airtel BD"},
+    {"product_name": "Tempered Glass (Universal)", "cost_price": 60.0,  "retail_price": 150.0,   "stock_quantity": 3,   "category": "Accessories",   "supplier_name": "Local Import"},
 ]
 
 CUSTOMERS = [
@@ -43,6 +42,9 @@ CUSTOMERS = [
     {"name": "Mitu Akter",    "phone_number": "01810000004"},
     {"name": "Jahangir Alam", "phone_number": "01810000005"},
 ]
+
+# Store identity shown on the owner profile
+STORE_NAME = "zaman telecom"
 
 # payment methods weighted for variety
 PAYMENTS = ["Cash", "Cash", "Cash", "Card", "bKash"]
@@ -56,8 +58,14 @@ def seed():
         if not owner:
             owner = services.register_user(db, schemas.EmployeeCreate(**{**OWNER, "role": "owner"}), creator_role=None)
             print(f"[+] Owner created: {owner.name} (ID {owner.user_id}, phone {OWNER['phone_number']}, password owner123)")
+            print(f"    Store name: {STORE_NAME}")
         else:
             print(f"[=] Using existing owner: {owner.name} (ID {owner.user_id})")
+        # Keep the store name in sync with the demo data
+        if owner.store_name != STORE_NAME:
+            owner.store_name = STORE_NAME
+            db.commit()
+
         owner_id = owner.user_id
 
         # ---------------- Employees ----------------
@@ -150,9 +158,9 @@ def seed():
         print(f"Customers: {db.query(models.Customer).count()}")
         print(f"Sales:     {db.query(models.Sale).count()}")
         print("\nLogin credentials:")
-        print(f"  Owner    -> phone 01700000001  password owner123")
-        print(f"  Employee -> phone 01700000002  password emp123")
-        print(f"  Employee -> phone 01700000003  password emp123")
+        print(f"  Owner    -> phone {OWNER['phone_number']}  password {OWNER['password']}  (store: {STORE_NAME})")
+        for e in EMPLOYEES:
+            print(f"  Employee -> phone {e['phone_number']}  password {e['password']}")
     finally:
         db.close()
 

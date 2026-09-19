@@ -15,6 +15,7 @@
         <table class="table table-striped table-hover mb-0">
             <thead class="table-dark">
                 <tr>
+                    <th>Photo</th>
                     <th>ID</th>
                     <th>Product Name</th>
                     <th>Category</th>
@@ -25,7 +26,7 @@
                 </tr>
             </thead>
             <tbody id="product-list">
-                <tr><td colspan="7" class="text-center py-3">Loading inventory...</td></tr>
+                <tr><td colspan="8" class="text-center py-3">Loading inventory...</td></tr>
             </tbody>
         </table>
     </div>
@@ -47,9 +48,14 @@
                 </div>
                 <div class="row">
                     <div class="col mb-2"><label class="form-label">Stock</label><input type="number" id="p-stock" class="form-control" value="0"></div>
-                    <div class="col mb-2"><label class="form-label">Category</label><input id="p-category" class="form-control"></div>
+                    <div class="col mb-2"><label class="form-label">Category</label><input id="p-category" class="form-control" list="category-options" placeholder="Type or pick an existing category"></div>
                 </div>
                 <div class="mb-2"><label class="form-label">Supplier</label><input id="p-supplier" class="form-control"></div>
+                <div class="mb-2">
+                    <label class="form-label">Picture</label>
+                    <input type="file" id="p-photo" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif">
+                    <img id="p-photo-preview" src="" alt="" class="mt-2 rounded border" style="width:80px; height:80px; object-fit:cover; display:none;">
+                </div>
                 <button class="btn btn-primary w-100" onclick="submitNewProduct()">Save Product</button>
             </div>
         </div>
@@ -65,13 +71,21 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="mb-3 d-flex align-items-center">
+                    <img id="edit-p-photo-preview" src="" alt="" class="rounded border me-3"
+                         style="width:80px; height:80px; object-fit:cover; display:none;">
+                    <div class="flex-grow-1">
+                        <label class="form-label mb-1">Picture (upload to replace)</label>
+                        <input type="file" id="edit-p-photo" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,image/gif">
+                    </div>
+                </div>
                 <div class="mb-2"><label class="form-label">Name</label><input id="edit-p-name" class="form-control"></div>
                 <div class="row">
                     <div class="col mb-2"><label class="form-label">Cost Price</label><input type="number" id="edit-p-cost" class="form-control"></div>
                     <div class="col mb-2"><label class="form-label">Retail Price</label><input type="number" id="edit-p-retail" class="form-control"></div>
                 </div>
                 <div class="row">
-                    <div class="col mb-2"><label class="form-label">Category</label><input id="edit-p-category" class="form-control"></div>
+                    <div class="col mb-2"><label class="form-label">Category</label><input id="edit-p-category" class="form-control" list="category-options" placeholder="Type or pick an existing category"></div>
                     <div class="col mb-2"><label class="form-label">Supplier</label><input id="edit-p-supplier" class="form-control"></div>
                 </div>
                 <hr>
@@ -85,13 +99,27 @@
         </div>
     </div>
 </div>
+
+<!-- Shared category suggestions (filled from existing products) -->
+<datalist id="category-options"></datalist>
 {% endblock %}
 
 {% block scripts %}
 <script>
     const IS_OWNER = window.APP_USER.role === 'owner';
 
-    document.addEventListener("DOMContentLoaded", loadProducts);
+    document.addEventListener("DOMContentLoaded", () => { loadProducts(); loadCategories(); });
+
+    // --- Category autocomplete: existing categories -> datalist ---
+    async function loadCategories() {
+        try {
+            const r = await fetch('/products/categories');
+            if (!r.ok) return;
+            const categories = await r.json();
+            document.getElementById('category-options').innerHTML =
+                categories.map(c => `<option value="${c}">`).join('');
+        } catch (e) { /* suggestions are optional */ }
+    }
 
     async function loadProducts() {
         const tbody = document.getElementById('product-list');
@@ -102,12 +130,15 @@
             tbody.innerHTML = '';
 
             if (products.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No products found in inventory.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">No products found in inventory.</td></tr>`;
                 return;
             }
 
             products.forEach(p => {
                 const lowStock = p.stock_quantity <= 5 ? 'text-danger fw-bold' : '';
+                const photoCell = p.photo
+                    ? `<img src="${p.photo}" alt="" class="rounded border" style="width:48px; height:48px; object-fit:cover;">`
+                    : `<div class="rounded border bg-secondary text-white d-flex align-items-center justify-content-center" style="width:48px; height:48px;">🛒</div>`;
                 const actions = IS_OWNER ? `
                     <td>
                         <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${p.product_id})">Edit</button>
@@ -116,6 +147,7 @@
 
                 tbody.innerHTML += `
                     <tr>
+                        <td>${photoCell}</td>
                         <td>#${p.product_id}</td>
                         <td class="fw-bold">${p.product_name}</td>
                         <td><span class="badge bg-secondary">${p.category || 'N/A'}</span></td>
@@ -126,11 +158,38 @@
                     </tr>`;
             });
         } catch (error) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-3 text-danger">Failed to load products.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-3 text-danger">Failed to load products.</td></tr>`;
         }
     }
 
     // --- OWNER: add ---
+    // Live preview of the chosen picture in the Add modal
+    document.getElementById('p-photo').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        const preview = document.getElementById('p-photo-preview');
+        if (file) {
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'inline-block';
+        } else {
+            preview.src = '';
+            preview.style.display = 'none';
+        }
+    });
+
+    // Upload a picture for a product; keeps failures non-fatal
+    async function uploadPhoto(productId, inputId) {
+        const input = document.getElementById(inputId);
+        const file = input && input.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await fetch(`/products/${productId}/photo`, { method: 'POST', body: fd });
+        if (!r.ok) {
+            const data = await r.json().catch(() => ({}));
+            alert("Picture upload failed: " + (data.detail || r.status));
+        }
+    }
+
     async function submitNewProduct() {
         const payload = {
             product_name: document.getElementById('p-name').value.trim(),
@@ -150,7 +209,14 @@
             body: JSON.stringify(payload)
         });
         const data = await r.json();
-        if (r.ok) { bootstrap.Modal.getInstance(document.getElementById('addProductModal')).hide(); loadProducts(); }
+        if (r.ok) {
+            await uploadPhoto(data.product_id, 'p-photo');
+            bootstrap.Modal.getInstance(document.getElementById('addProductModal')).hide();
+            // reset the form for next time
+            ['p-name','p-cost','p-retail','p-stock','p-category','p-supplier','p-photo'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('p-photo-preview').style.display = 'none';
+            loadProducts(); loadCategories();
+        }
         else alert("Error: " + data.detail);
     }
 
@@ -161,6 +227,10 @@
         const p = await r.json();
         editId = id;
         document.getElementById('edit-p-id-badge').innerText = `#${id}`;
+        const preview = document.getElementById('edit-p-photo-preview');
+        if (p.photo) { preview.src = p.photo; preview.style.display = 'inline-block'; }
+        else { preview.src = ''; preview.style.display = 'none'; }
+        document.getElementById('edit-p-photo').value = '';
         document.getElementById('edit-p-name').value = p.product_name;
         document.getElementById('edit-p-cost').value = p.cost_price;
         document.getElementById('edit-p-retail').value = p.retail_price;
@@ -197,7 +267,11 @@
             body: JSON.stringify(payload)
         });
         const data = await r.json();
-        if (r.ok) { bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide(); loadProducts(); }
+        if (r.ok) {
+            await uploadPhoto(editId, 'edit-p-photo');
+            bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
+            loadProducts(); loadCategories();
+        }
         else alert("Error: " + data.detail);
     }
 

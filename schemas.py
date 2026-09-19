@@ -13,6 +13,7 @@ class ProductBase(BaseModel):
     stock_quantity: int = 0  # Add this line
     category: Optional[str] = None
     supplier_name: Optional[str] = None
+    photo: Optional[str] = None
 
 
 class ProductCreate(ProductBase):
@@ -34,6 +35,7 @@ class ProductUpdate(BaseModel):
     stock_quantity: Optional[int] = None
     category: Optional[str] = None
     supplier_name: Optional[str] = None
+    photo: Optional[str] = None
 
 
 class StockUpdate(BaseModel):
