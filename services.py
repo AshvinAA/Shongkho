@@ -179,6 +179,43 @@ def update_employee(db: Session, employee_user_id: int, updates: schemas.Employe
     return user
 
 
+def update_profile(db: Session, user_id: int, updates: schemas.ProfileUpdate):
+    """Self-service: a logged-in user edits their own profile (name, phone, photo)."""
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    data = updates.model_dump(exclude_unset=True)
+
+    # Phone number: normalize and reject junk / duplicates (login depends on it)
+    if data.get("phone_number") is not None:
+        new_phone = str(data["phone_number"]).replace(" ", "").replace("-", "").strip()
+        digits = new_phone.replace("+", "")
+        if not digits.isdigit() or not (10 <= len(digits) <= 15):
+            raise HTTPException(
+                status_code=400,
+                detail="Phone number must be 10-15 digits (e.g. 01712345678)."
+            )
+        clash = db.query(models.User).filter(
+            models.User.phone_number == new_phone,
+            models.User.user_id != user_id
+        ).first()
+        if clash:
+            raise HTTPException(
+                status_code=400,
+                detail=f"That phone number is already used by {clash.name} (#{clash.user_id})."
+            )
+        data["phone_number"] = new_phone
+
+    for field in ("name", "phone_number", "photo"):
+        if field in data and data[field] is not None:
+            setattr(user, field, data[field])
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def delete_employee(db: Session, employee_user_id: int):
     """Owner-only: remove an employee account."""
     user = db.query(models.User).filter(models.User.user_id == employee_user_id).first()
@@ -466,6 +503,7 @@ def get_sale_receipt(db: Session, transaction_id: int):
         "total_revenue": sale.total_revenue,
         "employee_name": sale.employee.name if sale.employee else "(deleted employee)",
         "customer_name": sale.customer.name if sale.customer else "Walk-in",
+        "customer_phone": sale.customer.phone_number if sale.customer else None,
         "items": items
     }
 
