@@ -15,7 +15,7 @@ export function getProduct(productId) {
   return get(`/products/${productId}`)
 }
 
-/** Owner-only: create a product. */
+/** Owner-only: create product. */
 export function createProduct(payload) {
   return post('/products/', payload)
 }
