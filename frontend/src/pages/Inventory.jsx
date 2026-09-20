@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as productsApi from '../api/products.js'
+import * as uploadsApi from '../api/uploads.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { RoleGate } from '../components/RoleGate.jsx'
 import Modal from '../components/Modal.jsx'
+import Avatar from '../components/Avatar.jsx'
 import CategoryInput from '../components/CategoryInput.jsx'
 import { fmtMoney, fmtDate } from '../utils/format.js'
 
@@ -17,7 +19,7 @@ const EMPTY_FORM = {
   supplier_name: '',
 }
 
-/** Inventory management: stock table, search/filters, owner add/edit/delete. */
+/** Inventory management: photo tile grid, detail pop-out, owner add/edit/delete. */
 export default function Inventory() {
   const { user } = useAuth()
   const isOwner = user?.role === 'owner'
@@ -32,10 +34,15 @@ export default function Inventory() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
 
+  // ------------------------------------------------ detail pop-out
+  const [detailProduct, setDetailProduct] = useState(null)
+
   // ------------------------------------------------ modals
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null) // product object or null
   const [form, setForm] = useState(EMPTY_FORM)
+  const [formPhoto, setFormPhoto] = useState(null) // File selected for upload
+  const [formPhotoRemoved, setFormPhotoRemoved] = useState(false)
   const [formError, setFormError] = useState(null)
   const [saving, setSaving] = useState(false)
 
@@ -78,10 +85,22 @@ export default function Inventory() {
     return true
   })
 
+  // ------------------------------------------------ detail pop-out
+  function openDetails(product) {
+    setDetailProduct(product)
+  }
+
+  function openEditFromDetails() {
+    openEdit(detailProduct)
+    setDetailProduct(null)
+  }
+
   // ------------------------------------------------ form handlers
   function openAdd() {
     setEditing(null)
     setForm(EMPTY_FORM)
+    setFormPhoto(null)
+    setFormPhotoRemoved(false)
     setFormError(null)
     setFormOpen(true)
   }
@@ -96,6 +115,8 @@ export default function Inventory() {
       stock_quantity: String(product.stock_quantity ?? ''),
       supplier_name: product.supplier_name || '',
     })
+    setFormPhoto(null)
+    setFormPhotoRemoved(false)
     setFormError(null)
     setFormOpen(true)
   }
@@ -107,6 +128,16 @@ export default function Inventory() {
 
   function handleCategoryChange(value) {
     setForm((f) => ({ ...f, category: value }))
+  }
+
+  function handlePhotoChosen(file) {
+    setFormPhoto(file)
+    setFormPhotoRemoved(false)
+  }
+
+  function handlePhotoRemoved() {
+    setFormPhoto(null)
+    setFormPhotoRemoved(true)
   }
 
   function validateForm() {
@@ -137,13 +168,29 @@ export default function Inventory() {
       stock_quantity: Number(form.stock_quantity),
       supplier_name: form.supplier_name.trim() || null,
     }
+    if (editing && formPhotoRemoved) payload.photo = null
+
     try {
+      let saved
       if (editing) {
-        await productsApi.updateProduct(editing.product_id, payload)
+        saved = await productsApi.updateProduct(editing.product_id, payload)
       } else {
-        await productsApi.createProduct(payload)
+        saved = await productsApi.createProduct(payload)
+      }
+      // A newly chosen photo needs the product to exist first
+      if (formPhoto) {
+        try {
+          saved = await uploadsApi.uploadProductPhoto(saved.product_id, formPhoto)
+        } catch (uploadErr) {
+          setFormError(`Product saved, but the picture failed: ${uploadErr.message}`)
+          setSaving(false)
+          setFormPhoto(null)
+          await load()
+          return
+        }
       }
       setFormOpen(false)
+      setFormPhoto(null)
       await load()
     } catch (err) {
       setFormError(err.message)
@@ -238,67 +285,97 @@ export default function Inventory() {
         </label>
       </div>
 
-      <div className="card">
-        {loading ? (
-          <div className="page-loading" role="status">
-            <div className="spinner" />
-            <p className="muted">Loading inventory…</p>
-          </div>
-        ) : filtered.length === 0 ? (
+      {loading ? (
+        <div className="card page-loading" role="status">
+          <div className="spinner" />
+          <p className="muted">Loading inventory…</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card">
           <p className="muted">No products found{search || categoryFilter || lowOnly ? ' with these filters.' : ' — add your first product.'}</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th>Supplier</th>
-                  <th>Cost</th>
-                  <th>Retail</th>
-                  <th>Stock</th>
-                  <th>Added</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.product_id} className={p.stock_quantity === 0 ? 'row-danger' : p.stock_quantity <= LOW_STOCK_THRESHOLD ? 'row-warning' : ''}>
-                    <td>#{p.product_id}</td>
-                    <td className="cell-strong">{p.product_name}</td>
-                    <td>{p.category || '—'}</td>
-                    <td>{p.supplier_name || '—'}</td>
-                    <td>{fmtMoney(p.cost_price)}</td>
-                    <td>{fmtMoney(p.retail_price)}</td>
-                    <td>
-                      <span className={`stock-chip ${p.stock_quantity === 0 ? 'stock-out' : p.stock_quantity <= LOW_STOCK_THRESHOLD ? 'stock-low' : 'stock-ok'}`}>
-                        {p.stock_quantity === 0 ? 'Out of stock' : p.stock_quantity}
-                      </span>
-                    </td>
-                    <td className="muted">{fmtDate(p.date)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <RoleGate allowedRoles={['owner']}>
-                          <button type="button" className="btn btn-outline btn-sm" onClick={() => openStock(p)}>
-                            Stock
-                          </button>
-                          <button type="button" className="btn btn-outline btn-sm" onClick={() => openEdit(p)}>
-                            Edit
-                          </button>
-                          <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(p)}>
-                            Delete
-                          </button>
-                        </RoleGate>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </div>
+      ) : (
+        <div className="inventory-grid">
+          {filtered.map((p) => {
+            const low = p.stock_quantity > 0 && p.stock_quantity <= LOW_STOCK_THRESHOLD
+            const out = p.stock_quantity === 0
+            return (
+              <button
+                key={p.product_id}
+                type="button"
+                className={`product-card ${low ? 'is-low' : ''} ${out ? 'is-out' : ''}`}
+                onClick={() => openDetails(p)}
+                title={`View ${p.product_name}`}
+              >
+                <span className="product-card-photo">
+                  <Avatar product={p} size="lg" className="product-card-avatar" />
+                  {out && <span className="product-card-flag flag-out">Out of stock</span>}
+                  {!out && low && <span className="product-card-flag flag-low">Low</span>}
+                </span>
+                <span className="product-card-name">{p.product_name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ---------------- Detail pop-out ---------------- */}
+      <Modal
+        open={!!detailProduct}
+        onClose={() => setDetailProduct(null)}
+        title={detailProduct?.product_name ?? ''}
+      >
+        {detailProduct && (
+          <div className="product-detail">
+            <div className="product-detail-photo">
+              <Avatar product={detailProduct} size="xl" />
+            </div>
+
+            <div className="product-detail-body">
+              <div className="summary-row">
+                <span className="muted">Product ID</span>
+                <strong>#{detailProduct.product_id}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Category</span>
+                <strong>{detailProduct.category || '—'}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Supplier</span>
+                <strong>{detailProduct.supplier_name || '—'}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Cost Price</span>
+                <strong>{fmtMoney(detailProduct.cost_price)}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Retail Price</span>
+                <strong>{fmtMoney(detailProduct.retail_price)}</strong>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Stock</span>
+                <span className={`stock-chip ${detailProduct.stock_quantity === 0 ? 'stock-out' : detailProduct.stock_quantity <= LOW_STOCK_THRESHOLD ? 'stock-low' : 'stock-ok'}`}>
+                  {detailProduct.stock_quantity === 0 ? 'Out of stock' : `${detailProduct.stock_quantity} in stock`}
+                </span>
+              </div>
+              <div className="summary-row">
+                <span className="muted">Added</span>
+                <strong>{fmtDate(detailProduct.date)}</strong>
+              </div>
+            </div>
           </div>
         )}
-      </div>
+      {detailProduct && isOwner && (
+          <div className="product-detail-actions">
+            <button type="button" className="btn btn-outline" onClick={() => openStock(detailProduct)}>
+              Adjust Stock
+            </button>
+            <button type="button" className="btn" onClick={openEditFromDetails}>
+              ✏️ Edit Product
+            </button>
+          </div>
+        )}
+      </Modal>
 
       {/* ---------------- Add / Edit modal ---------------- */}
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? `Edit ${editing.product_name}` : 'Add Product'}>
@@ -306,6 +383,18 @@ export default function Inventory() {
           {formError && (
             <div className="alert alert-error" role="alert">{formError}</div>
           )}
+
+          <div className="form-group">
+            <label className="form-label">Product Picture</label>
+            <PhotoField
+              product={editing}
+              file={formPhoto}
+              removed={formPhotoRemoved}
+              onChoose={handlePhotoChosen}
+              onRemove={handlePhotoRemoved}
+              disabled={saving}
+            />
+          </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="inv-name">Product Name *</label>
@@ -398,6 +487,61 @@ export default function Inventory() {
           Products with recorded sales cannot be deleted — set stock to 0 instead.
         </p>
       </Modal>
+    </div>
+  )
+}
+
+/**
+ * Photo picker used by the add/edit form.
+ * - Add mode: choose a file; it uploads right after the product is created.
+ * - Edit mode: preview the current photo, replace or clear it.
+ */
+function PhotoField({ product, file, removed, onChoose, onRemove, disabled }) {
+  const inputRef = useRef(null)
+
+  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
+  const serverPhoto = product?.photo && !removed && !file ? product.photo : null
+
+  // Revoke object URLs to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
+  return (
+    <div className="photo-upload-row">
+      {previewUrl || serverPhoto ? (
+        <img src={previewUrl || serverPhoto} alt="Product preview" className="photo-preview photo-preview-square" />
+      ) : (
+        <div className="photo-preview photo-placeholder photo-preview-square">📦</div>
+      )}
+      <div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) onChoose(f)
+          }}
+          disabled={disabled}
+          style={{ display: 'none' }}
+        />
+        <div className="row-actions">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => inputRef.current?.click()} disabled={disabled}>
+            {file ? 'Change image…' : 'Choose image…'}
+          </button>
+          {(file || serverPhoto) && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={onRemove} disabled={disabled}>
+              Remove
+            </button>
+          )}
+        </div>
+        {!file && !product && <p className="form-hint info">You can add a picture now or later.</p>}
+        {file && <p className="form-hint info">Picture uploads when you save.</p>}
+      </div>
     </div>
   )
 }

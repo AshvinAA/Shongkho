@@ -260,7 +260,8 @@ def create_product(db: Session, product: schemas.ProductCreate):
         retail_price=product.retail_price,
         stock_quantity=product.stock_quantity,
         category=getattr(product, 'category', None),
-        supplier_name=getattr(product, 'supplier_name', None)
+        supplier_name=getattr(product, 'supplier_name', None),
+        photo=getattr(product, 'photo', None)
     )
     db.add(db_product)
     db.commit()
@@ -554,3 +555,206 @@ def get_sales_performance(db: Session, skip: int = 0, limit: int = 100):
             "total_profit": float(totals[2])
         })
     return result
+
+
+def get_my_all_time_performance(db: Session, employee_id: int):
+    """All-time sales stats for one employee (used on their dashboard)."""
+    totals = db.query(
+        func.count(models.Sale.transaction_id),
+        func.coalesce(func.sum(models.Sale.total_revenue), 0.0),
+        func.coalesce(func.sum(models.Sale.total_profit), 0.0)
+    ).filter(models.Sale.employee_id == employee_id).one()
+    return {
+        "total_sales": totals[0],
+        "total_revenue": float(totals[1]),
+        "total_profit": float(totals[2])
+    }
+
+
+def get_my_store(db: Session, user_id: int):
+    """'My Store' card data for the employee dashboard: employer, salary, colleagues."""
+    emp = db.query(models.Employee).filter(models.Employee.user_id == user_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee account not found")
+
+    owner = emp.employer
+    colleague_count = 0
+    if owner:
+        colleague_count = (
+            db.query(models.Employee)
+            .filter(models.Employee.employer_id == owner.user_id, models.Employee.user_id != user_id)
+            .count()
+        )
+
+    return {
+        "store_name": owner.store_name if owner else None,
+        "owner_name": owner.name if owner else None,
+        "owner_phone": owner.phone_number if owner else None,
+        "owner_photo": owner.photo if owner else None,
+        "my_position": emp.position,
+        "my_salary": emp.salary,
+        "date_appointed": emp.date_appointed,
+        "colleagues": colleague_count,
+    }
+
+
+# ---------------------------------------------------------
+# STORE CHAT SERVICES
+# ---------------------------------------------------------
+
+def _resolve_store_group(db: Session, user_id: int, role: str):
+    """Find the store (owner account) this user chats under.
+
+    - Owners chat under their OWN store (owner_id = their own user_id).
+    - Employees chat under their employer's store.
+    Raises 404 when the account or its store cannot be found.
+    """
+    if role == "owner":
+        owner = db.query(models.Owner).filter(models.Owner.user_id == user_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner account not found")
+        return owner
+
+    emp = db.query(models.Employee).filter(models.Employee.user_id == user_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee account not found")
+    if not emp.employer_id:
+        raise HTTPException(status_code=404, detail="You are not linked to a store yet")
+    owner = emp.employer
+    if not owner:
+        raise HTTPException(status_code=404, detail="Your store owner account no longer exists")
+    return owner
+
+
+def _sender_payload(user: models.User) -> dict:
+    """Serialize a chat participant (works for owners AND employees)."""
+    return {
+        "user_id": user.user_id,
+        "name": user.name,
+        "user_type": user.user_type,
+        "photo": user.photo,
+    }
+
+
+def _message_payload(msg: models.ChatMessage, sender: models.User, reply_msg=None, reply_sender=None) -> dict:
+    payload = {
+        "message_id": msg.message_id,
+        "sender": _sender_payload(sender),
+        "body": "" if msg.deleted else msg.body,
+        "reply_to_id": msg.reply_to_id,
+        "reply_to": None,
+        "deleted": bool(msg.deleted),
+        "date": msg.date,
+        "time": msg.time,
+    }
+    if msg.reply_to_id:
+        if reply_msg is not None:
+            payload["reply_to"] = {
+                "message_id": reply_msg.message_id,
+                "sender_name": reply_sender.name if reply_sender else "Unknown",
+                "body": "" if reply_msg.deleted else reply_msg.body,
+                "deleted": bool(reply_msg.deleted),
+            }
+        else:
+            # The quoted message is gone or not yet loaded
+            payload["reply_to"] = {
+                "message_id": msg.reply_to_id,
+                "sender_name": "Unknown",
+                "body": "Message unavailable",
+                "deleted": True,
+            }
+    return payload
+
+
+def get_chat_messages(db: Session, user_id: int, role: str, after_id: int = 0, limit: int = 200):
+    """Group chat history for the caller's store, oldest first.
+
+    `after_id` enables cheap incremental polling: only fetch messages newer
+    than the last one the client has already rendered.
+    """
+    owner = _resolve_store_group(db, user_id, role)
+
+    query = db.query(models.ChatMessage).filter(models.ChatMessage.owner_id == owner.user_id)
+    if after_id:
+        query = query.filter(models.ChatMessage.message_id > after_id)
+    rows = query.order_by(models.ChatMessage.message_id.desc()).limit(limit).all()
+    rows.reverse()  # oldest -> newest for rendering
+
+    # Collect sender + reply targets in bulk to avoid N+1 queries
+    sender_ids = {m.sender_id for m in rows}
+    reply_ids = {m.reply_to_id for m in rows if m.reply_to_id}
+
+    senders = {}
+    if sender_ids:
+        for u in db.query(models.User).filter(models.User.user_id.in_(sender_ids)).all():
+            senders[u.user_id] = u
+
+    replies = {}
+    if reply_ids:
+        for r in db.query(models.ChatMessage).filter(models.ChatMessage.message_id.in_(reply_ids)).all():
+            replies[r.message_id] = r
+
+    result = []
+    for m in rows:
+        sender = senders.get(m.sender_id)
+        if sender is None:
+            continue  # sender account removed and message orphaned — skip defensively
+        reply_msg = replies.get(m.reply_to_id) if m.reply_to_id else None
+        reply_sender = None
+        if reply_msg is not None:
+            reply_sender = senders.get(reply_msg.sender_id)
+            if reply_sender is None:
+                ru = db.query(models.User).filter(models.User.user_id == reply_msg.sender_id).first()
+                reply_sender = ru
+        result.append(_message_payload(m, sender, reply_msg, reply_sender))
+    return result
+
+
+def send_chat_message(db: Session, user_id: int, role: str, payload: schemas.ChatMessageCreate):
+    """Post a message to the caller's store group chat (optionally as a reply)."""
+    owner = _resolve_store_group(db, user_id, role)
+
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    reply_msg = None
+    if payload.reply_to_id:
+        reply_msg = (
+            db.query(models.ChatMessage)
+            .filter(
+                models.ChatMessage.message_id == payload.reply_to_id,
+                models.ChatMessage.owner_id == owner.user_id,  # must be in the SAME chat
+            )
+            .first()
+        )
+        if not reply_msg:
+            raise HTTPException(status_code=404, detail="The message you replied to no longer exists")
+
+    msg = models.ChatMessage(
+        owner_id=owner.user_id,
+        sender_id=user_id,
+        body=body,
+        reply_to_id=payload.reply_to_id if reply_msg else None,
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+
+    reply_sender = None
+    if reply_msg is not None:
+        reply_sender = db.query(models.User).filter(models.User.user_id == reply_msg.sender_id).first()
+    return _message_payload(msg, db.query(models.User).filter(models.User.user_id == user_id).first(), reply_msg, reply_sender)
+
+
+def delete_chat_message(db: Session, user_id: int, message_id: int):
+    """Soft-delete a message — allowed only for its sender (owner or employee)."""
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.message_id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if msg.sender_id != user_id:
+        raise HTTPException(status_code=403, detail="You can only delete your own messages")
+    msg.deleted = 1
+    msg.body = ""
+    db.commit()
+    return {"detail": "Message deleted", "message_id": message_id}
