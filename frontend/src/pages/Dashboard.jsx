@@ -9,6 +9,155 @@ import { fmtMoney, todayISO } from '../utils/format.js'
 
 const LOW_STOCK_THRESHOLD = 5
 
+/**
+ * Owner-only metrics. Rendered through RoleGate as a COMPONENT (not inline
+ * JSX) so `stats.performance` etc. are only evaluated when this actually
+ * renders — inline JSX would evaluate eagerly and crash for employees,
+ * whose stats never include the owner-only fields.
+ */
+function OwnerMetrics({ stats }) {
+  return (
+    <>
+      <div className="stat-grid">
+        <div className="card stat-card">
+          <div className="stat-label">Today's Revenue</div>
+          <div className="stat-value">{fmtMoney(stats.daily?.total_revenue)}</div>
+          <div className="stat-sub muted">{stats.daily?.total_transactions ?? 0} transactions today</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">Today's Profit</div>
+          <div className="stat-value">{fmtMoney(stats.daily?.total_profit)}</div>
+          <div className="stat-sub muted">Across all staff</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">30-Day Revenue</div>
+          <div className="stat-value">{fmtMoney(stats.monthly?.total_revenue)}</div>
+          <div className="stat-sub muted">{stats.monthly?.total_transactions ?? 0} transactions</div>
+        </div>
+        <div className={`card stat-card ${stats.lowStock.length > 0 ? 'stat-warning' : ''}`}>
+          <div className="stat-label">Low Stock</div>
+          <div className="stat-value">{stats.lowStock.length}</div>
+          <div className="stat-sub muted">
+            {stats.lowStock.length > 0 ? (
+              <Link to="/inventory">Restock needed →</Link>
+            ) : (
+              'All products healthy'
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-columns">
+        <div className="card">
+          <div className="card-title">Top Performers (All Time)</div>
+          {stats.performance?.length === 0 ? (
+            <p className="muted">No employees registered yet. <Link to="/staff">Add staff →</Link></p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Sales</th>
+                  <th>Revenue</th>
+                  <th>Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(stats.performance ?? []).map((p) => (
+                  <tr key={p.employee_id}>
+                    <td>{p.employee_name}</td>
+                    <td>{p.total_sales}</td>
+                    <td>{fmtMoney(p.total_revenue)}</td>
+                    <td>{fmtMoney(p.total_profit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Low Stock Alert (≤ {LOW_STOCK_THRESHOLD})</div>
+          {stats.lowStock.length === 0 ? (
+            <p className="muted">Everything is well stocked. 🎉</p>
+          ) : (
+            <ul className="low-stock-list">
+              {stats.lowStock.slice(0, 8).map((p) => (
+                <li key={p.product_id}>
+                  <span>{p.product_name}</span>
+                  <span className={`stock-chip ${p.stock_quantity === 0 ? 'stock-out' : 'stock-low'}`}>
+                    {p.stock_quantity === 0 ? 'Out of stock' : `${p.stock_quantity} left`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** Employee-only view — same eager-evaluation rationale as OwnerMetrics. */
+function EmployeeMetrics({ stats }) {
+  return (
+    <>
+      <div className="stat-grid">
+        <div className="card stat-card">
+          <div className="stat-label">My Sales Today</div>
+          <div className="stat-value">{stats.todaysSales.length}</div>
+          <div className="stat-sub muted">Transactions you processed</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">My Revenue Today</div>
+          <div className="stat-value">{fmtMoney(stats.todayRevenue)}</div>
+          <div className="stat-sub muted">Keep it up! 💪</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">Products in Store</div>
+          <div className="stat-value">{stats.productCount}</div>
+          <div className="stat-sub muted">
+            <Link to="/inventory">Browse inventory →</Link>
+          </div>
+        </div>
+        <div className={`card stat-card ${stats.lowStock.length > 0 ? 'stat-warning' : ''}`}>
+          <div className="stat-label">Low Stock Items</div>
+          <div className="stat-value">{stats.lowStock.length}</div>
+          <div className="stat-sub muted">Tell the owner before they run out</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Your Recent Transactions</div>
+        {stats.todaysSales.length === 0 ? (
+          <p className="muted">No sales today yet — <Link to="/pos">open the POS</Link> to start ringing up customers.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Txn #</th>
+                <th>Time</th>
+                <th>Payment</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.todaysSales.slice(0, 8).map((s) => (
+                <tr key={s.transaction_id}>
+                  <td>#{s.transaction_id}</td>
+                  <td>{String(s.time).slice(0, 5)}</td>
+                  <td>{s.payment_method}</td>
+                  <td>{fmtMoney(s.total_revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  )
+}
+
 /** Landing page with summary statistics, tailored per role. */
 export default function Dashboard() {
   const { user } = useAuth()
@@ -25,6 +174,9 @@ export default function Dashboard() {
           productsApi.listProducts({ limit: 1000 }),
           salesApi.listSales({ limit: 200 }),
         ])
+        if (!Array.isArray(products) || !Array.isArray(sales)) {
+          throw new Error('Unexpected server response while loading the dashboard.')
+        }
 
         const today = todayISO()
         const todaysSales = sales.filter((s) => String(s.date).slice(0, 10) === today)
@@ -45,7 +197,9 @@ export default function Dashboard() {
           ])
           result.daily = daily
           result.monthly = monthly
-          result.performance = performance.sort((a, b) => b.total_revenue - a.total_revenue).slice(0, 5)
+          result.performance = Array.isArray(performance)
+            ? performance.sort((a, b) => b.total_revenue - a.total_revenue).slice(0, 5)
+            : []
         }
 
         if (!cancelled) setStats(result)
@@ -98,140 +252,14 @@ export default function Dashboard() {
       {/* OWNER METRICS                                     */}
       {/* ------------------------------------------------ */}
       <RoleGate allowedRoles={['owner']}>
-        <div className="stat-grid">
-          <div className="card stat-card">
-            <div className="stat-label">Today's Revenue</div>
-            <div className="stat-value">{fmtMoney(stats.daily?.total_revenue)}</div>
-            <div className="stat-sub muted">{stats.daily?.total_transactions ?? 0} transactions today</div>
-          </div>
-          <div className="card stat-card">
-            <div className="stat-label">Today's Profit</div>
-            <div className="stat-value">{fmtMoney(stats.daily?.total_profit)}</div>
-            <div className="stat-sub muted">Across all staff</div>
-          </div>
-          <div className="card stat-card">
-            <div className="stat-label">30-Day Revenue</div>
-            <div className="stat-value">{fmtMoney(stats.monthly?.total_revenue)}</div>
-            <div className="stat-sub muted">{stats.monthly?.total_transactions ?? 0} transactions</div>
-          </div>
-          <div className={`card stat-card ${stats.lowStock.length > 0 ? 'stat-warning' : ''}`}>
-            <div className="stat-label">Low Stock</div>
-            <div className="stat-value">{stats.lowStock.length}</div>
-            <div className="stat-sub muted">
-              {stats.lowStock.length > 0 ? (
-                <Link to="/inventory">Restock needed →</Link>
-              ) : (
-                'All products healthy'
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="dashboard-columns">
-          <div className="card">
-            <div className="card-title">Top Performers (All Time)</div>
-            {stats.performance.length === 0 ? (
-              <p className="muted">No employees registered yet. <Link to="/staff">Add staff →</Link></p>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Sales</th>
-                    <th>Revenue</th>
-                    <th>Profit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.performance.map((p) => (
-                    <tr key={p.employee_id}>
-                      <td>{p.employee_name}</td>
-                      <td>{p.total_sales}</td>
-                      <td>{fmtMoney(p.total_revenue)}</td>
-                      <td>{fmtMoney(p.total_profit)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          <div className="card">
-            <div className="card-title">Low Stock Alert (≤ {LOW_STOCK_THRESHOLD})</div>
-            {stats.lowStock.length === 0 ? (
-              <p className="muted">Everything is well stocked. 🎉</p>
-            ) : (
-              <ul className="low-stock-list">
-                {stats.lowStock.slice(0, 8).map((p) => (
-                  <li key={p.product_id}>
-                    <span>{p.product_name}</span>
-                    <span className={`stock-chip ${p.stock_quantity === 0 ? 'stock-out' : 'stock-low'}`}>
-                      {p.stock_quantity === 0 ? 'Out of stock' : `${p.stock_quantity} left`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+        <OwnerMetrics stats={stats} />
       </RoleGate>
 
       {/* ------------------------------------------------ */}
       {/* EMPLOYEE VIEW                                     */}
       {/* ------------------------------------------------ */}
       <RoleGate allowedRoles={['employee']}>
-        <div className="stat-grid">
-          <div className="card stat-card">
-            <div className="stat-label">My Sales Today</div>
-            <div className="stat-value">{stats.todaysSales.length}</div>
-            <div className="stat-sub muted">Transactions you processed</div>
-          </div>
-          <div className="card stat-card">
-            <div className="stat-label">My Revenue Today</div>
-            <div className="stat-value">{fmtMoney(stats.todayRevenue)}</div>
-            <div className="stat-sub muted">Keep it up! 💪</div>
-          </div>
-          <div className="card stat-card">
-            <div className="stat-label">Products in Store</div>
-            <div className="stat-value">{stats.productCount}</div>
-            <div className="stat-sub muted">
-              <Link to="/inventory">Browse inventory →</Link>
-            </div>
-          </div>
-          <div className={`card stat-card ${stats.lowStock.length > 0 ? 'stat-warning' : ''}`}>
-            <div className="stat-label">Low Stock Items</div>
-            <div className="stat-value">{stats.lowStock.length}</div>
-            <div className="stat-sub muted">Tell the owner before they run out</div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-title">Your Recent Transactions</div>
-          {stats.todaysSales.length === 0 ? (
-            <p className="muted">No sales today yet — <Link to="/pos">open the POS</Link> to start ringing up customers.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Txn #</th>
-                  <th>Time</th>
-                  <th>Payment</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.todaysSales.slice(0, 8).map((s) => (
-                  <tr key={s.transaction_id}>
-                    <td>#{s.transaction_id}</td>
-                    <td>{String(s.time).slice(0, 5)}</td>
-                    <td>{s.payment_method}</td>
-                    <td>{fmtMoney(s.total_revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <EmployeeMetrics stats={stats} />
       </RoleGate>
     </div>
   )
