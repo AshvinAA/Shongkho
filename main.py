@@ -1,6 +1,7 @@
 
 import os
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import RedirectResponse
@@ -8,11 +9,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from routes import auth, products, sales, customers, employees
+from routes import auth, products, sales, customers, employees, chat
 
 import deps
+import database
 
-app = FastAPI(title="Shongkho POS API", version="3.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Make sure new tables & columns (chat_messages, products.photo, ...)
+    # exist before serving traffic.
+    try:
+        database.init_db()
+    except Exception as exc:  # noqa: BLE001 - don't block boot on migration issues
+        print(f"[startup] migration check failed: {exc}")
+    yield
+
+
+app = FastAPI(title="Shongkho POS API", version="3.0", lifespan=lifespan)
 
 # ---------------------------------------------------------
 # MIDDLEWARE
@@ -81,6 +95,7 @@ app.include_router(customers.router, prefix=API_PREFIX)
 app.include_router(employees.router, prefix=API_PREFIX)
 app.include_router(sales.router, prefix=API_PREFIX)
 app.include_router(sales.sales_router, prefix=API_PREFIX)
+app.include_router(chat.router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------
