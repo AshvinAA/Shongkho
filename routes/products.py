@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
-import schemas
+import os
+import time
 import services
+import schemas
 import deps
 from database import get_db
 
@@ -28,6 +30,50 @@ def get_products(
 ):
     """List products — available to owner and employee (read-only)."""
     return services.get_products(db=db, skip=skip, limit=limit)
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+
+
+@router.post("/{product_id}/photo", response_model=schemas.ProductResponse)
+def upload_product_photo(
+    product_id: int,
+    file: UploadFile = File(...),
+    current_user=Depends(deps.require_owner),   # OWNER ONLY
+    db: Session = Depends(get_db),
+):
+    """Owner-only: upload a picture for a product and set it as its photo."""
+    ext = ALLOWED_IMAGE_TYPES.get(file.content_type)
+    if not ext:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP or GIF images are allowed.")
+
+    contents = file.file.read()
+    if len(contents) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 2 MB).")
+
+    upload_dir = os.path.join("static", "product_pics")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    product = services.get_product(db=db, product_id=product_id)
+
+    # Remove the previous picture (only files we manage)
+    if product.photo and product.photo.startswith("/static/product_pics/"):
+        old_path = product.photo.lstrip("/")
+        if os.path.isfile(old_path):
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+    filename = f"product_{product_id}{ext}"
+    file_path = os.path.join(upload_dir, filename)
+    with open(file_path, "wb") as out:
+        out.write(contents)
+
+    product.photo = f"/static/product_pics/{filename}?v={int(time.time())}"
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 @router.get("/search/", response_model=List[schemas.ProductResponse])

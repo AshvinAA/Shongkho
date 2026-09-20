@@ -1,5 +1,24 @@
 import { get, put, del, qs } from './client.js'
 
+/** Any role: view your own profile. */
+export function getMyProfile() {
+  return get('/employees/me/profile')
+}
+
+/** Any role: 'My Store' card for the dashboard (employer, salary, colleagues). */
+export function getMyStore() {
+  return get('/employees/me/store')
+}
+
+/** Any role: your own all-time sales totals. */
+export function getMyAllTimePerformance() {
+  return get('/employees/me/performance')
+}
+
+/** Any role: edit your own name / phone / photo. */
+export function updateMyProfile(payload) {
+  return put('/employees/me/profile', payload)
+}
 /** Owner-only: list employees. */
 export function listEmployees({ skip = 0, limit = 100 } = {}) {
   return get(`/employees/${qs({ skip, limit })}`)

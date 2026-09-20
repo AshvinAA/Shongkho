@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { RoleGate } from '../components/RoleGate.jsx'
+import Avatar from '../components/Avatar.jsx'
 import * as productsApi from '../api/products.js'
 import * as salesApi from '../api/sales.js'
 import * as employeesApi from '../api/employees.js'
-import { fmtMoney, todayISO } from '../utils/format.js'
+import { fmtMoney, fmtDate, todayISO } from '../utils/format.js'
 
 const LOW_STOCK_THRESHOLD = 5
 
@@ -65,7 +66,12 @@ function OwnerMetrics({ stats }) {
               <tbody>
                 {(stats.performance ?? []).map((p) => (
                   <tr key={p.employee_id}>
-                    <td>{p.employee_name}</td>
+                    <td>
+                      <span className="table-person">
+                        <Avatar user={{ name: p.employee_name }} size="xs" />
+                        {p.employee_name}
+                      </span>
+                    </td>
                     <td>{p.total_sales}</td>
                     <td>{fmtMoney(p.total_revenue)}</td>
                     <td>{fmtMoney(p.total_profit)}</td>
@@ -84,7 +90,10 @@ function OwnerMetrics({ stats }) {
             <ul className="low-stock-list">
               {stats.lowStock.slice(0, 8).map((p) => (
                 <li key={p.product_id}>
-                  <span>{p.product_name}</span>
+                  <span className="table-person">
+                    <Avatar product={p} size="xs" />
+                    {p.product_name}
+                  </span>
                   <span className={`stock-chip ${p.stock_quantity === 0 ? 'stock-out' : 'stock-low'}`}>
                     {p.stock_quantity === 0 ? 'Out of stock' : `${p.stock_quantity} left`}
                   </span>
@@ -98,10 +107,54 @@ function OwnerMetrics({ stats }) {
   )
 }
 
+/** "My Store" card — where this employee works, who they work for, pay details. */
+function MyStoreCard({ store }) {
+  return (
+    <div className="card store-card">
+      <div className="card-title">🏬 My Store</div>
+      <div className="store-card-body">
+        <div className="store-owner">
+          <Avatar user={{ name: store.owner_name, photo: store.owner_photo }} size="lg" />
+          <div>
+            <div className="store-name">{store.store_name || 'Store'}</div>
+            <div className="muted">
+              Owner: <strong>{store.owner_name || '—'}</strong>
+            </div>
+            {store.owner_phone && (
+              <div className="muted">📞 {store.owner_phone}</div>
+            )}
+          </div>
+        </div>
+
+        <dl className="store-facts">
+          <div className="store-fact">
+            <dt>My Position</dt>
+            <dd>{store.my_position || '—'}</dd>
+          </div>
+          <div className="store-fact">
+            <dt>Monthly Salary</dt>
+            <dd>{store.my_salary != null ? fmtMoney(store.my_salary) : '—'}</dd>
+          </div>
+          <div className="store-fact">
+            <dt>Joined On</dt>
+            <dd>{fmtDate(store.date_appointed)}</dd>
+          </div>
+          <div className="store-fact">
+            <dt>Team Size</dt>
+            <dd>{store.colleagues + 1} {store.colleagues === 0 ? 'person' : 'people'}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  )
+}
+
 /** Employee-only view — same eager-evaluation rationale as OwnerMetrics. */
 function EmployeeMetrics({ stats }) {
   return (
     <>
+      {stats.myStore && <MyStoreCard store={stats.myStore} />}
+
       <div className="stat-grid">
         <div className="card stat-card">
           <div className="stat-label">My Sales Today</div>
@@ -114,11 +167,9 @@ function EmployeeMetrics({ stats }) {
           <div className="stat-sub muted">Keep it up! 💪</div>
         </div>
         <div className="card stat-card">
-          <div className="stat-label">Products in Store</div>
-          <div className="stat-value">{stats.productCount}</div>
-          <div className="stat-sub muted">
-            <Link to="/inventory">Browse inventory →</Link>
-          </div>
+          <div className="stat-label">All-Time Sales</div>
+          <div className="stat-value">{stats.allTime?.total_sales ?? 0}</div>
+          <div className="stat-sub muted">{fmtMoney(stats.allTime?.total_revenue)} earned for the store</div>
         </div>
         <div className={`card stat-card ${stats.lowStock.length > 0 ? 'stat-warning' : ''}`}>
           <div className="stat-label">Low Stock Items</div>
@@ -127,32 +178,55 @@ function EmployeeMetrics({ stats }) {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">Your Recent Transactions</div>
-        {stats.todaysSales.length === 0 ? (
-          <p className="muted">No sales today yet — <Link to="/pos">open the POS</Link> to start ringing up customers.</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Txn #</th>
-                <th>Time</th>
-                <th>Payment</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.todaysSales.slice(0, 8).map((s) => (
-                <tr key={s.transaction_id}>
-                  <td>#{s.transaction_id}</td>
-                  <td>{String(s.time).slice(0, 5)}</td>
-                  <td>{s.payment_method}</td>
-                  <td>{fmtMoney(s.total_revenue)}</td>
+      <div className="dashboard-columns">
+        <div className="card">
+          <div className="card-title">Your Recent Transactions</div>
+          {stats.todaysSales.length === 0 ? (
+            <p className="muted">No sales today yet — <Link to="/pos">open the POS</Link> to start ringing up customers.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Txn #</th>
+                  <th>Time</th>
+                  <th>Payment</th>
+                  <th>Total</th>
                 </tr>
+              </thead>
+              <tbody>
+                {stats.todaysSales.slice(0, 8).map((s) => (
+                  <tr key={s.transaction_id}>
+                    <td>#{s.transaction_id}</td>
+                    <td>{String(s.time).slice(0, 5)}</td>
+                    <td>{s.payment_method}</td>
+                    <td>{fmtMoney(s.total_revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">Low Stock To Watch (≤ {LOW_STOCK_THRESHOLD})</div>
+          {stats.lowStock.length === 0 ? (
+            <p className="muted">Shelves are fully stocked. 🎉</p>
+          ) : (
+            <ul className="low-stock-list">
+              {stats.lowStock.slice(0, 8).map((p) => (
+                <li key={p.product_id}>
+                  <span className="table-person">
+                    <Avatar product={p} size="xs" />
+                    {p.product_name}
+                  </span>
+                  <span className={`stock-chip ${p.stock_quantity === 0 ? 'stock-out' : 'stock-low'}`}>
+                    {p.stock_quantity === 0 ? 'Out of stock' : `${p.stock_quantity} left`}
+                  </span>
+                </li>
               ))}
-            </tbody>
-          </table>
-        )}
+            </ul>
+          )}
+        </div>
       </div>
     </>
   )
@@ -200,6 +274,15 @@ export default function Dashboard() {
           result.performance = Array.isArray(performance)
             ? performance.sort((a, b) => b.total_revenue - a.total_revenue).slice(0, 5)
             : []
+        }
+
+        if (user?.role === 'employee') {
+          const [myStore, allTime] = await Promise.all([
+            employeesApi.getMyStore().catch(() => null),
+            employeesApi.getMyAllTimePerformance().catch(() => null),
+          ])
+          result.myStore = myStore
+          result.allTime = allTime
         }
 
         if (!cancelled) setStats(result)

@@ -83,6 +83,18 @@ def upload_my_photo(
     return services.update_profile(db=db, user_id=current_user["id"], updates=updates)
 
 
+@router.get("/me/store", response_model=schemas.MyStoreResponse)
+def get_my_store(current_user=Depends(deps.require_any), db: Session = Depends(get_db)):
+    """'My Store' info for the employee dashboard (owners get their own store too)."""
+    return services.get_my_store(db=db, user_id=current_user["id"])
+
+
+@router.get("/me/performance")
+def get_my_performance(current_user=Depends(deps.require_any), db: Session = Depends(get_db)):
+    """All-time sales totals for the logged-in user (own numbers only)."""
+    return services.get_my_all_time_performance(db=db, employee_id=current_user["id"])
+
+
 @router.get("/", response_model=List[schemas.EmployeeResponse])
 def get_employees(
     skip: int = 0,
