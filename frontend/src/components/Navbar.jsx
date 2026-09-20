@@ -43,6 +43,9 @@ export default function Navbar() {
         <span className="muted">
           {user?.name} · <span className={`role-badge role-${user?.role}`}>{user?.role}</span>
         </span>
+        <Link to="/profile" className="btn btn-outline btn-sm">
+          My Profile
+        </Link>
         <button type="button" className="btn btn-outline btn-sm" onClick={handleLogout}>
           Logout
         </button>

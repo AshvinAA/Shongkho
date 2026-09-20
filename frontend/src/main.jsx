@@ -15,6 +15,7 @@ import Inventory from './pages/Inventory.jsx'
 import Sales from './pages/Sales.jsx'
 import Customers from './pages/Customers.jsx'
 import Staff from './pages/Staff.jsx'
+import Profile from './pages/Profile.jsx'
 import './styles.css'
 
 const router = createBrowserRouter([
@@ -49,6 +50,7 @@ const router = createBrowserRouter([
       { path: 'inventory', element: <Inventory /> },
       { path: 'sales', element: <Sales /> },
       { path: 'customers', element: <Customers /> },
+      { path: 'profile', element: <Profile /> },
       {
         path: 'staff',
         element: (
