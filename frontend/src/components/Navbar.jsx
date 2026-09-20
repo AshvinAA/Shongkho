@@ -1,6 +1,7 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import RoleGate from './RoleGate.jsx'
+import Avatar from './Avatar.jsx'
 
 const LINKS = [
   { to: '/', label: 'Dashboard', end: true },
@@ -8,9 +9,10 @@ const LINKS = [
   { to: '/inventory', label: 'Inventory' },
   { to: '/sales', label: 'Sales' },
   { to: '/customers', label: 'Customers' },
+  { to: '/chat', label: '💬 Chat' },
 ]
 
-/** Top navigation bar with role-aware links and logout. */
+/** Top navigation bar with role-aware links, avatar and logout. */
 export default function Navbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -40,11 +42,11 @@ export default function Navbar() {
       </nav>
 
       <div className="navbar-user">
-        <span className="muted">
-          {user?.name} · <span className={`role-badge role-${user?.role}`}>{user?.role}</span>
-        </span>
-        <Link to="/profile" className="btn btn-outline btn-sm">
-          My Profile
+        <Link to="/profile" className="navbar-avatar-link" title="My Profile">
+          <Avatar user={{ name: user?.name, photo: user?.photo }} size="sm" />
+          <span className="navbar-user-name">
+            {user?.name} · <span className={`role-badge role-${user?.role}`}>{user?.role}</span>
+          </span>
         </Link>
         <button type="button" className="btn btn-outline btn-sm" onClick={handleLogout}>
           Logout

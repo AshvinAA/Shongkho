@@ -6,7 +6,7 @@ const AuthContext = createContext(null)
 /**
  * Auth state for the whole SPA.
  *
- * `user` is null | { user_id, name, role } — hydrated from the server
+ * `user` is null | { user_id, name, role, photo } — hydrated from the server
  * session via /auth/me on first mount (no tokens in localStorage).
  * `loading` is true until that first check resolves.
  */

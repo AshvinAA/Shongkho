@@ -95,6 +95,7 @@ class Product(Base):
     
     category = Column(String(100))
     supplier_name = Column(String(255))
+    photo = Column(String(550))
     date = Column(Date, default=date.today)
 
     sale_items = relationship("SaleItem", back_populates="product")
@@ -142,5 +143,30 @@ class SaleItem(Base):
 
     sale = relationship("Sale", back_populates="items")
     product = relationship("Product", back_populates="sale_items")
+
+
+# ---------------------------------------------------------
+# 4. STORE CHAT (WhatsApp-style group for owner + employees)
+# ---------------------------------------------------------
+
+class ChatMessage(Base):
+    __tablename__ = 'chat_messages'
+
+    message_id = Column(Integer, primary_key=True, index=True)
+    # All messages belong to the store's single group chat. Kept as a plain
+    # column (not an FK to owners) so chat survives even if an owner account
+    # is ever removed.
+    owner_id = Column(Integer, index=True)               # store / group identifier
+    sender_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
+    body = Column(Text, nullable=False)
+    # Optional message being replied to (WhatsApp-style quote)
+    reply_to_id = Column(Integer, ForeignKey('chat_messages.message_id'), nullable=True)
+    # Soft delete: message stays for thread integrity but shows as "deleted"
+    deleted = Column(Integer, default=0, nullable=False)
+    date = Column(Date, default=date.today, nullable=False)
+    time = Column(Time, default=lambda: datetime.now().time(), nullable=False)
+
+    sender = relationship("User", foreign_keys=[sender_id], viewonly=True)
+    reply_to = relationship("ChatMessage", remote_side=[message_id], viewonly=True)
     
 

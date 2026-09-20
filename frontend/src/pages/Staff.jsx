@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as employeesApi from '../api/employees.js'
 import * as authApi from '../api/auth.js'
 import Modal from '../components/Modal.jsx'
+import Avatar from '../components/Avatar.jsx'
 import { fmtMoney, fmtDate } from '../utils/format.js'
 
 /**
@@ -185,7 +186,12 @@ export default function Staff() {
                   return (
                     <tr key={emp.user_id}>
                       <td>#{emp.user_id}</td>
-                      <td className="cell-strong">{emp.name}</td>
+                      <td>
+                        <span className="table-person">
+                          <Avatar user={emp} size="xs" />
+                          <span className="cell-strong">{emp.name}</span>
+                        </span>
+                      </td>
                       <td>{emp.phone_number}</td>
                       <td>{emp.position || '—'}</td>
                       <td>{emp.salary != null ? fmtMoney(emp.salary) : '—'}</td>

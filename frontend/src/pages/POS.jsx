@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as productsApi from '../api/products.js'
 import * as customersApi from '../api/customers.js'
 import * as salesApi from '../api/sales.js'
+import Avatar from '../components/Avatar.jsx'
 import { fmtMoney, fmtDate, fmtTime } from '../utils/format.js'
 
 const PAYMENT_METHODS = ['Cash', 'Card', 'bKash', 'Nagad']
@@ -242,6 +243,9 @@ export default function POS() {
                       disabled={out}
                       title={out ? 'Out of stock' : `Add ${p.product_name} — ${fmtMoney(p.retail_price)}`}
                     >
+                      <span className="product-tile-photo">
+                        <Avatar product={p} size="md" className="product-tile-avatar" />
+                      </span>
                       <span className="product-name">{p.product_name}</span>
                       <span className="product-meta">
                         <strong>{fmtMoney(p.retail_price)}</strong>
