@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 from datetime import date, time
 
@@ -8,12 +8,12 @@ from datetime import date, time
 
 class ProductBase(BaseModel):
     product_name: str
-    cost_price: float     
-    retail_price: float   
-    stock_quantity: int = 0  # Add this line
+    cost_price: float = Field(ge=0)      # prices cannot be negative
+    retail_price: float = Field(ge=0)
+    stock_quantity: int = Field(default=0, ge=0)
     category: Optional[str] = None
     supplier_name: Optional[str] = None
-    photo: Optional[str] = None
+    photo: Optional[str] = None          # product picture URL (or data URI)
 
 
 class ProductCreate(ProductBase):
@@ -22,7 +22,7 @@ class ProductCreate(ProductBase):
 class ProductResponse(ProductBase):
     product_id: int
     date: date
-    
+
     # Allows Pydantic to read data directly from SQLAlchemy models
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,9 +30,9 @@ class ProductResponse(ProductBase):
 class ProductUpdate(BaseModel):
     """Owner-only: partial update of a product."""
     product_name: Optional[str] = None
-    cost_price: Optional[float] = None
-    retail_price: Optional[float] = None
-    stock_quantity: Optional[int] = None
+    cost_price: Optional[float] = Field(None, ge=0)
+    retail_price: Optional[float] = Field(None, ge=0)
+    stock_quantity: Optional[int] = Field(None, ge=0)
     category: Optional[str] = None
     supplier_name: Optional[str] = None
     photo: Optional[str] = None
@@ -127,9 +127,22 @@ class EmployeeResponse(BaseModel):
     salary: Optional[float] = None
     employer_id: Optional[int] = None
     photo: Optional[str] = None
+    date_appointed: Optional[date] = None
 
     class Config:
         from_attributes = True
+
+
+class MyStoreResponse(BaseModel):
+    """Employee dashboard 'My Store' card: where they work and who they work for."""
+    store_name: Optional[str] = None
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_photo: Optional[str] = None
+    my_position: Optional[str] = None
+    my_salary: Optional[float] = None
+    date_appointed: Optional[date] = None
+    colleagues: int = 0
 
 
 class EmployeePerformance(BaseModel):
@@ -144,7 +157,7 @@ class EmployeePerformance(BaseModel):
 # ---------------------------------------------------------
 class SaleItemCreate(BaseModel):
     product_id: int
-    quantity: int
+    quantity: int = Field(ge=1)  # must buy at least one
     # We do NOT ask the frontend for the price to prevent hacking.
     # We will fetch the secure price from the DB in our business logic!
 
@@ -216,6 +229,42 @@ class SaleResponse(BaseModel):
     customer_id: int
     items: List[SaleItemResponse]
     
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------
+# 5. STORE CHAT SCHEMAS
+# ---------------------------------------------------------
+class ChatMessageCreate(BaseModel):
+    """Send a message to the store group chat."""
+    body: str = Field(min_length=1, max_length=4000)
+    reply_to_id: Optional[int] = None
+
+
+class ChatSender(BaseModel):
+    user_id: int
+    name: str
+    user_type: str
+    photo: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatReplyPreview(BaseModel):
+    message_id: int
+    sender_name: Optional[str] = None
+    body: str
+    deleted: bool = False
+
+
+class ChatMessageResponse(BaseModel):
+    message_id: int
+    sender: ChatSender
+    body: str
+    reply_to_id: Optional[int] = None
+    reply_to: Optional[ChatReplyPreview] = None
+    deleted: bool = False
+    date: date
+    time: time
     model_config = ConfigDict(from_attributes=True)
 
 
