@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+import models
 import schemas
 import services
 import deps
@@ -77,13 +78,15 @@ def reset_password(payload: schemas.PasswordResetConfirm, db: Session = Depends(
 
 
 @router.get("/me")
-def me(request: Request):
-    """Who am I? Used by the frontend to render role-aware UI."""
+def me(request: Request, db: Session = Depends(get_db)):
+    """Who am I? Used by the frontend to render role-aware UI (incl. navbar avatar)."""
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not logged in")
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
     return {
         "user_id": user_id,
-        "role": request.session.get("role"),
-        "name": request.session.get("name"),
+        "role": request.session.get("role") or (user.user_type if user else None),
+        "name": user.name if user else request.session.get("name"),
+        "photo": user.photo if user else None,
     }
