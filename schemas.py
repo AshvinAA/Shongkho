@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 from datetime import date, time
 
@@ -8,9 +8,9 @@ from datetime import date, time
 
 class ProductBase(BaseModel):
     product_name: str
-    cost_price: float     
-    retail_price: float   
-    stock_quantity: int = 0  # Add this line
+    cost_price: float = Field(ge=0)      # prices cannot be negative
+    retail_price: float = Field(ge=0)
+    stock_quantity: int = Field(default=0, ge=0)
     category: Optional[str] = None
     supplier_name: Optional[str] = None
 
@@ -29,9 +29,9 @@ class ProductResponse(ProductBase):
 class ProductUpdate(BaseModel):
     """Owner-only: partial update of a product."""
     product_name: Optional[str] = None
-    cost_price: Optional[float] = None
-    retail_price: Optional[float] = None
-    stock_quantity: Optional[int] = None
+    cost_price: Optional[float] = Field(None, ge=0)
+    retail_price: Optional[float] = Field(None, ge=0)
+    stock_quantity: Optional[int] = Field(None, ge=0)
     category: Optional[str] = None
     supplier_name: Optional[str] = None
 
@@ -134,7 +134,7 @@ class EmployeePerformance(BaseModel):
 # ---------------------------------------------------------
 class SaleItemCreate(BaseModel):
     product_id: int
-    quantity: int
+    quantity: int = Field(ge=1)  # must buy at least one
     # We do NOT ask the frontend for the price to prevent hacking.
     # We will fetch the secure price from the DB in our business logic!
 
