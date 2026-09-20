@@ -109,6 +109,13 @@ class EmployeeUpdate(BaseModel):
     role: Optional[str] = None   # promote/demote between owner and employee
 
 
+class ProfileUpdate(BaseModel):
+    """Self-service profile edit (own account, both roles)."""
+    name: Optional[str] = None
+    phone_number: Optional[str] = None
+    photo: Optional[str] = None   # profile picture URL (or data URI)
+
+
 class EmployeeResponse(BaseModel):
     user_id: int
     name: str
@@ -117,6 +124,7 @@ class EmployeeResponse(BaseModel):
     position: Optional[str] = None
     salary: Optional[float] = None
     employer_id: Optional[int] = None
+    photo: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -192,6 +200,7 @@ class ReceiptResponse(BaseModel):
     employee_id: Optional[int] = None
     employee_name: Optional[str] = None
     customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
     items: List[dict]
 
 class SaleResponse(BaseModel):

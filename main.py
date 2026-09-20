@@ -1,19 +1,12 @@
-"""
-Shongkho POS — FastAPI backend.
 
-This app serves a strict JSON API under /api/v1/*. It does NOT render HTML;
-the UI is the decoupled Vite + React SPA in /frontend (dev server on
-http://localhost:5173, proxied to this backend).
-"""
-import os
-import uuid
-
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from routes import auth, products, sales, customers, employees
+
 import deps
 
 app = FastAPI(title="Shongkho POS API", version="3.0")

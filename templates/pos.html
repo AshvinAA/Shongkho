@@ -8,9 +8,12 @@
         <div class="card shadow-sm border-0 mb-3">
             <div class="card-body">
                 <div class="row align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label">Product ID</label>
-                        <input type="number" id="add-product-id" class="form-control" placeholder="Scan or enter ID">
+                    <div class="col-md-5 position-relative">
+                        <label class="form-label">Product Name</label>
+                        <input type="text" id="add-product-name" class="form-control" placeholder="Start typing a product name..."
+                               autocomplete="off" oninput="onProductInput()" onkeydown="onProductKeydown(event)">
+                        <input type="hidden" id="add-product-id">
+                        <div id="product-suggestions" class="list-group position-absolute shadow" style="top:100%; left:0; right:0; z-index:1050; display:none; max-height:260px; overflow-y:auto;"></div>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Quantity</label>
@@ -50,11 +53,12 @@
                 <h5 class="mb-0 fw-bold">Customer Details</h5>
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <label class="form-label">Phone Number</label>
-                    <input type="text" id="customer-phone" class="form-control" placeholder="017..." onblur="checkCustomer()">
-                    <div class="form-text">New number? Just type a name and press + to quick-add.</div>
-                </div>
+        <div class="mb-3">
+            <label class="form-label">Phone Number</label>
+            <input type="text" id="customer-phone" class="form-control" placeholder="017..."
+                   onblur="checkCustomer()" oninput="onCustomerPhoneInput()">
+            <div class="form-text">New number? Just type a name — the customer is registered automatically at checkout.</div>
+        </div>
                 <div class="mb-3">
                     <label class="form-label">Customer Name</label>
                     <div class="input-group">
@@ -93,22 +97,142 @@
 
 {% block scripts %}
 <script>
+    // --- PRODUCT NAME AUTOCOMPLETE ---
+    let productSuggestions = [];
+    let activeSuggestionIndex = -1;
+    let searchTimer = null;
+    let selectedProduct = null;   // the product chosen from the suggestion list
+
+    async function onProductInput() {
+        const term = document.getElementById('add-product-name').value.trim();
+        document.getElementById('add-product-id').value = '';
+        selectedProduct = null;
+
+        clearTimeout(searchTimer);
+        if (!term) {
+            hideSuggestions();
+            return;
+        }
+        searchTimer = setTimeout(() => fetchSuggestions(term), 200);
+    }
+
+    async function fetchSuggestions(term) {
+        try {
+            const r = await fetch(`/products/search/?query=${encodeURIComponent(term)}`, { credentials: 'same-origin' });
+            if (!r.ok) { hideSuggestions(); return; }
+            productSuggestions = await r.json();
+            renderSuggestions();
+        } catch (e) {
+            hideSuggestions();
+        }
+    }
+
+    function renderSuggestions() {
+        const box = document.getElementById('product-suggestions');
+        activeSuggestionIndex = -1;
+        if (!productSuggestions.length) {
+            box.innerHTML = `<div class="list-group-item text-muted py-2">No products match "${document.getElementById('add-product-name').value.trim()}"</div>`;
+            box.style.display = 'block';
+            return;
+        }
+        box.innerHTML = productSuggestions.map((p, i) => `
+            <button type="button" class="list-group-item list-group-item-action py-2" data-index="${i}" onmousedown="chooseSuggestion(${i})">
+                <div class="d-flex justify-content-between">
+                    <span class="fw-bold">${p.product_name}</span>
+                    <span class="text-muted small">ID #${p.product_id} • ৳${Number(p.retail_price).toFixed(2)}</span>
+                </div>
+                <div class="small ${p.stock_quantity > 0 ? 'text-muted' : 'text-danger'}">Stock: ${p.stock_quantity}${p.category ? ' • ' + p.category : ''}</div>
+            </button>`).join('');
+        box.style.display = 'block';
+    }
+
+    function chooseSuggestion(index) {
+        const p = productSuggestions[index];
+        if (!p) return;
+        selectedProduct = p;
+        document.getElementById('add-product-name').value = p.product_name;
+        document.getElementById('add-product-id').value = p.product_id;
+        hideSuggestions();
+        document.getElementById('add-qty').focus();
+    }
+
+    function hideSuggestions() {
+        document.getElementById('product-suggestions').style.display = 'none';
+        activeSuggestionIndex = -1;
+    }
+
+    function onProductKeydown(e) {
+        const box = document.getElementById('product-suggestions');
+        const isOpen = box.style.display === 'block';
+        if (e.key === 'ArrowDown' && isOpen) {
+            e.preventDefault();
+            activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, productSuggestions.length - 1);
+            highlightSuggestion();
+        } else if (e.key === 'ArrowUp' && isOpen) {
+            e.preventDefault();
+            activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, 0);
+            highlightSuggestion();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (isOpen && activeSuggestionIndex >= 0) {
+                chooseSuggestion(activeSuggestionIndex);
+            } else {
+                // Name typed but no suggestion picked — pick first match if available
+                if (productSuggestions.length === 1) {
+                    chooseSuggestion(0);
+                } else {
+                    alert("Please choose the product from the suggestion list (search works by name, not ID).");
+                }
+            }
+        } else if (e.key === 'Escape') {
+            hideSuggestions();
+        }
+    }
+
+    function highlightSuggestion() {
+        const box = document.getElementById('product-suggestions');
+        box.querySelectorAll('.list-group-item-action').forEach(el => el.classList.remove('active'));
+        if (activeSuggestionIndex >= 0) {
+            const el = box.querySelector(`[data-index="${activeSuggestionIndex}"]`);
+            if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
+        }
+    }
+
+    // Hide suggestions when clicking outside the product field
+    document.addEventListener('click', (e) => {
+        const box = document.getElementById('product-suggestions');
+        if (box && !box.contains(e.target) && e.target.id !== 'add-product-name') hideSuggestions();
+    });
+
     // --- CART LOGIC ---
     let cart = [];
 
     function addItemToCart() {
+        // ID is auto-filled when the product is chosen from the name suggestions
         const productId = parseInt(document.getElementById('add-product-id').value);
         const qty = parseInt(document.getElementById('add-qty').value);
 
-        if (!productId || isNaN(qty) || qty <= 0) return;
+        if (!productId) {
+            alert("Please choose a product from the suggestion list first.");
+            return;
+        }
+        if (isNaN(qty) || qty <= 0) return;
 
         const existingItemIndex = cart.findIndex(item => item.product_id === productId);
         if (existingItemIndex > -1) {
             cart[existingItemIndex].quantity += qty;
         } else {
-            cart.push({ product_id: productId, quantity: qty });
+            cart.push({
+                product_id: productId,
+                product_name: (selectedProduct && selectedProduct.product_id === productId)
+                    ? selectedProduct.product_name
+                    : `Product #${productId}`,
+                quantity: qty
+            });
         }
 
+        selectedProduct = null;
+        document.getElementById('add-product-name').value = '';
         document.getElementById('add-product-id').value = '';
         document.getElementById('add-qty').value = '1';
         updateCartUI();
@@ -130,7 +254,7 @@
         cart.forEach((item, index) => {
             tbody.innerHTML += `
                 <tr>
-                    <td>#${item.product_id}</td>
+                    <td>${item.product_name} <span class="text-muted small">(#${item.product_id})</span></td>
                     <td>${item.quantity}</td>
                     <td><button class="btn btn-sm btn-danger" onclick="removeItem(${index})">X</button></td>
                 </tr>
@@ -145,10 +269,23 @@
             return;
         }
 
-        const customerId = document.getElementById('customer-id').value;
+        // Auto-register the customer from phone + name if not registered yet.
+        const phone = document.getElementById('customer-phone').value.trim();
+        const name = document.getElementById('customer-name').value.trim();
+        let customerId = document.getElementById('customer-id').value;
+
         if (!customerId) {
-            alert("Please search and select a valid customer before checking out.");
-            return;
+            if (!phone || phone.length < 10) {
+                alert("Please enter the customer's phone number (at least 10 digits) before checking out.");
+                return;
+            }
+            if (!name) {
+                alert("New phone number — please enter the customer's name before checking out.");
+                return;
+            }
+            const ok = await quickAddCustomer();
+            if (!ok) return;   // customer created & customer-id filled by quickAddCustomer
+            customerId = document.getElementById('customer-id').value;
         }
 
         // Employee identity now comes from the server session (secure).
@@ -173,10 +310,7 @@
                 alert(`Sale Complete! Transaction ID: #${data.transaction_id}\nTotal Revenue: ৳${data.total_revenue}`);
                 cart = [];
                 updateCartUI();
-                document.getElementById('customer-phone').value = '';
-                document.getElementById('customer-name').value = '';
-                document.getElementById('customer-id').value = '';
-                document.getElementById('customer-status').innerText = '';
+                resetCustomerFields();
             } else {
                 alert("Checkout failed: " + (data.detail || "Unknown error"));
             }
@@ -190,6 +324,18 @@
     let existingCustomerData = null;
     const modal = new bootstrap.Modal(document.getElementById('customerModal'));
 
+    // Typing a different phone number must clear the previously selected customer,
+    // otherwise checkout could attach the sale to the wrong customer.
+    let lastCheckedPhone = '';
+    function onCustomerPhoneInput() {
+        const phone = document.getElementById('customer-phone').value.trim();
+        if (phone !== lastCheckedPhone) {
+            document.getElementById('customer-id').value = '';
+            existingCustomerData = null;
+            document.getElementById('customer-status').innerHTML = '';
+        }
+    }
+
     async function checkCustomer() {
         const phone = document.getElementById('customer-phone').value.trim();
         const currentNameInput = document.getElementById('customer-name').value;
@@ -202,6 +348,7 @@
             if (response.ok) {
                 const customer = await response.json();
                 existingCustomerData = customer;
+                lastCheckedPhone = phone;
                 document.getElementById('customer-id').value = customer.customer_id;
                 status.innerHTML = `✅ Existing customer: <strong>${customer.name}</strong> (#${customer.customer_id})`;
 
@@ -215,6 +362,7 @@
             } else if (response.status === 404) {
                 existingCustomerData = null;
                 document.getElementById('customer-id').value = '';
+                lastCheckedPhone = '';
                 status.innerHTML = `🆕 New customer — enter a name and press <strong>+</strong> to quick-add.`;
             }
         } catch (error) {
@@ -222,31 +370,50 @@
         }
     }
 
+    function resetCustomerFields() {
+        document.getElementById('customer-phone').value = '';
+        document.getElementById('customer-name').value = '';
+        document.getElementById('customer-id').value = '';
+        document.getElementById('customer-status').innerHTML = '';
+        lastCheckedPhone = '';
+        existingCustomerData = null;
+    }
+
     async function quickAddCustomer() {
         const phone = document.getElementById('customer-phone').value.trim();
         const name = document.getElementById('customer-name').value.trim();
         const status = document.getElementById('customer-status');
 
-        if (!phone || phone.length < 10) { alert("Enter the customer's phone number first."); return; }
-        if (!name) { alert("Enter the customer's name to quick-add."); return; }
+        if (!phone || phone.length < 10) { alert("Enter the customer's phone number first."); return false; }
+        if (!name) { alert("Enter the customer's name to quick-add."); return false; }
 
         try {
-            const response = await fetch('/customers/', {
+            let response = await fetch('/customers/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
                 body: JSON.stringify({ name: name, phone_number: phone })
             });
-            const data = await response.json();
+            let data = await response.json();
+
+            // Two cashiers racing to add the same number: fall back to lookup.
+            if (!response.ok && response.status === 400 && data.detail && data.detail.includes('already registered')) {
+                response = await fetch(`/customers/phone/${phone}`, { credentials: 'same-origin' });
+                data = await response.json();
+            }
+
             if (response.ok) {
                 document.getElementById('customer-id').value = data.customer_id;
                 existingCustomerData = data;
-                status.innerHTML = `✅ Customer created: <strong>${data.name}</strong> (#${data.customer_id})`;
+                status.innerHTML = `✅ Customer: <strong>${data.name}</strong> (#${data.customer_id})`;
+                return true;
             } else {
-                alert("Error: " + data.detail);
+                alert("Error: " + (data.detail || "Could not register customer."));
+                return false;
             }
         } catch (error) {
             alert("Could not connect to server.");
+            return false;
         }
     }
 
@@ -257,7 +424,8 @@
 
     async function updateCustomerName() {
         const newName = document.getElementById('customer-name').value;
-        const customerId = existingCustomerData.customer_id;
+        const customerId = existingCustomerData ? existingCustomerData.customer_id : null;
+        if (!customerId) { modal.hide(); return; }
 
         await fetch(`/customers/${customerId}`, {
             method: 'PUT',
@@ -266,7 +434,7 @@
             body: JSON.stringify({ name: newName })
         });
         modal.hide();
-        alert("Customer name updated!");
+        checkCustomer();
     }
 </script>
 {% endblock %}
