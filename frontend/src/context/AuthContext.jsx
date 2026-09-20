@@ -50,6 +50,17 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  /** Re-hydrate the user from the server session (e.g. after a profile rename). */
+  const refreshUser = useCallback(async () => {
+    try {
+      const me = await authApi.fetchMe()
+      setUser(me)
+    } catch {
+      // Session ended server-side — drop the stale user
+      setUser(null)
+    }
+  }, [])
+
   const value = useMemo(
     () => ({
       user,
@@ -57,8 +68,9 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       login,
       logout,
+      refreshUser,
     }),
-    [user, loading, login, logout],
+    [user, loading, login, logout, refreshUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
