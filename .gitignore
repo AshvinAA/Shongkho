@@ -1,0 +1,39 @@
+# ============================================================
+# Shongkho — root .gitignore
+# ============================================================
+
+# --- Environment & secrets (never commit credentials) ---
+.env
+*.env
+!.env.example
+
+# --- Python build/runtime artifacts ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# --- Local SQLite databases (dev + throwaway test DBs) ---
+*.db
+*.sqlite3
+
+# --- Logs ---
+*.log
+
+# --- Node / Vite (frontend) ---
+node_modules/
+dist/
+.vite/
+*.local
+
+# --- Test coverage ---
+coverage/
+.nyc_output/
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,13 +1,16 @@
+# --- Runtime ---
 fastapi
 uvicorn[standard]
 sqlalchemy
-pymysql
-cryptography
+pymysql          # TiDB/MySQL driver
+cryptography     # required by pymysql for SSL
 python-dotenv
 pydantic
-passlib[bcrypt]
-bcrypt
-PyJWT
-itsdangerous
-jinja2
-python-multipart
+bcrypt           # password hashing
+itsdangerous     # signed session cookies
+python-multipart # file uploads
+
+# --- Testing ---
+pytest
+pytest-asyncio
+httpx            # ASGI test client for FastAPI

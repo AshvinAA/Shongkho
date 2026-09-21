@@ -1,10 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+"""
+Store group chat routes (owner + employees of one store).
+
+All three endpoints require any logged-in user; the service layer scopes
+every operation to the caller's store and enforces "only delete your own
+messages".
+"""
 from typing import List
 
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+import deps
 import schemas
 import services
-import deps
 from database import get_db
 
 router = APIRouter(prefix="/chat", tags=["Store Chat"])
@@ -17,9 +25,11 @@ def list_chat_messages(
     current_user=Depends(deps.require_any),   # owner and employee, one group per store
     db: Session = Depends(get_db),
 ):
-    """Store group chat history (oldest -> newest).
+    """
+    Store group chat history (oldest -> newest).
 
-    Pass `after_id` to fetch only newer messages (incremental polling).
+    Pass `after_id` to fetch only newer messages — the client polls with
+    the last message id it rendered, keeping the payload tiny.
     """
     try:
         return services.get_chat_messages(
@@ -31,7 +41,7 @@ def list_chat_messages(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - convert unexpected errors to a clean 500
         raise HTTPException(status_code=500, detail=f"Could not load chat: {e}")
 
 
@@ -41,7 +51,7 @@ def post_chat_message(
     current_user=Depends(deps.require_any),
     db: Session = Depends(get_db),
 ):
-    """Send a message to the store group chat (set reply_to_id to quote another message)."""
+    """Send a message to the store group chat (set reply_to_id to quote)."""
     try:
         return services.send_chat_message(
             db=db,
@@ -51,7 +61,7 @@ def post_chat_message(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Could not send message: {e}")
 
 
@@ -62,7 +72,9 @@ def remove_chat_message(
     db: Session = Depends(get_db),
 ):
     """Delete your own message (shows as 'message deleted' to everyone)."""
-    result = services.delete_chat_message(db=db, user_id=current_user["id"], message_id=message_id)
+    result = services.delete_chat_message(
+        db=db, user_id=current_user["id"], message_id=message_id
+    )
     if not result:
         raise HTTPException(status_code=404, detail="Message not found")
     return result
