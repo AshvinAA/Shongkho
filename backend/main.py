@@ -1,24 +1,39 @@
+"""
+Shongkho POS API — application entry point.
 
+Wiring overview:
+  1. Middleware: CORS (outermost, so every response gets CORS headers)
+     and the signed-cookie session used for authentication.
+  2. Static files: uploaded pictures served from backend/static.
+  3. Routers: everything the SPA uses lives under /api/v1/*.
+  4. Health check: GET /api/v1/health for uptime probes.
+
+Run with:
+  uvicorn main:app --reload                      (from the backend/ directory)
+  uvicorn main:app --reload --app-dir backend    (from the project root)
+"""
 import os
-import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import RedirectResponse
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from routes import auth, products, sales, customers, employees, chat
-
-import deps
 import database
+import deps
+from routes import auth, chat, customers, employees, products, sales
+
+STATIC_DIR = os.path.join(deps.BASE_DIR, "static")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Make sure new tables & columns (chat_messages, products.photo, ...)
-    # exist before serving traffic.
+    """
+    Startup: make sure new tables and columns (chat_messages,
+    products.photo, ...) exist before serving traffic. A migration
+    failure is logged but does not block boot.
+    """
     try:
         database.init_db()
     except Exception as exc:  # noqa: BLE001 - don't block boot on migration issues
@@ -30,8 +45,9 @@ app = FastAPI(title="Shongkho POS API", version="3.0", lifespan=lifespan)
 
 # ---------------------------------------------------------
 # MIDDLEWARE
-# (SessionMiddleware first, then CORS — so CORSMiddleware is
-# the outermost layer and every response gets CORS headers.)
+# SessionMiddleware is added first, then CORS — middleware runs in
+# reverse order of registration, so CORS ends up as the outermost layer
+# and every response (including errors) carries CORS headers.
 # ---------------------------------------------------------
 app.add_middleware(
     SessionMiddleware,
@@ -50,34 +66,38 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------
-# STATIC MEDIA (uploaded images)
+# STATIC MEDIA (uploaded images, resolved from backend/ regardless of cwd)
 # ---------------------------------------------------------
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 # ---------------------------------------------------------
-# IMAGE UPLOADS
+# PROFILE PHOTO UPLOAD
 # ---------------------------------------------------------
 @app.post("/api/v1/uploads/profile-photo", tags=["Uploads"])
 async def upload_profile_photo(
     file: UploadFile = File(...),
     current_user=Depends(deps.get_current_user),
 ):
-    """Save a profile picture and return its public /static URL."""
-    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    """
+    Save a profile picture and return its public /static URL.
+
+    Used by the Profile page before saving; the URL is then attached to
+    the account via PUT /employees/me/profile.
+    """
+    allowed = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
     if file.content_type not in allowed:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP or GIF images are allowed.")
 
-    ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}[file.content_type]
-    filename = f"{uuid.uuid4().hex}{ext}"
-
-    upload_dir = os.path.join("static", "profile_pics")
-    os.makedirs(upload_dir, exist_ok=True)
+    ext = allowed[file.content_type]
+    filename = f"{os.urandom(8).hex()}{ext}"  # random name — never trust client filenames
 
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image must be 5 MB or smaller.")
 
+    upload_dir = os.path.join(STATIC_DIR, "profile_pics")
+    os.makedirs(upload_dir, exist_ok=True)
     with open(os.path.join(upload_dir, filename), "wb") as out:
         out.write(contents)
 
@@ -103,4 +123,5 @@ app.include_router(chat.router, prefix=API_PREFIX)
 # ---------------------------------------------------------
 @app.get("/api/v1/health", tags=["Health"])
 def health_check():
+    """Uptime probe — no auth required."""
     return {"status": "ok", "service": "Shongkho POS API"}

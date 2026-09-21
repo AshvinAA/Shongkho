@@ -1,9 +1,20 @@
+"""
+Customer routes.
+
+Permissions at a glance:
+  - POST /            (POS quick-add)        -> both roles
+  - GET /phone/{num}  (POS lookup)           -> both roles
+  - GET /             (directory with spend) -> owner only
+  - PUT /{id}, GET /{id}/history             -> both roles
+"""
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+
+import deps
 import schemas
 import services
-import deps
 from database import get_db
 
 router = APIRouter(prefix="/customers", tags=["Customers"])
@@ -15,7 +26,7 @@ def create_customer(
     current_user=Depends(deps.require_any),     # both roles (POS quick-add)
     db: Session = Depends(get_db),
 ):
-    """Quick-add customer at the POS terminal (both roles)."""
+    """Quick-add a customer at the POS terminal (both roles)."""
     return services.create_customer(db=db, customer=customer)
 
 
@@ -23,7 +34,7 @@ def create_customer(
 def get_customers(
     skip: int = 0,
     limit: int = 100,
-    current_user=Depends(deps.require_owner),   # OWNER ONLY (directory w/ lifetime spend)
+    current_user=Depends(deps.require_owner),   # OWNER ONLY (directory w/ spend)
     db: Session = Depends(get_db),
 ):
     """Owner-only: full customer directory with lifetime spend."""
@@ -36,7 +47,7 @@ def get_customer_by_phone(
     current_user=Depends(deps.require_any),
     db: Session = Depends(get_db),
 ):
-    """POS lookup by phone (both roles)."""
+    """POS lookup by phone (both roles). 404 when the phone is unknown."""
     customer = services.get_customer_by_phone(db=db, phone_number=phone_number)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -50,6 +61,7 @@ def update_customer(
     current_user=Depends(deps.require_any),
     db: Session = Depends(get_db),
 ):
+    """Edit a customer's name (both roles — front-desk corrections)."""
     return services.update_customer_name(db=db, customer_id=customer_id, new_name=update_data.name)
 
 
@@ -59,7 +71,7 @@ def get_customer_history(
     current_user=Depends(deps.require_any),
     db: Session = Depends(get_db),
 ):
-    """Purchase history (both roles)."""
+    """Purchase history for one customer (both roles)."""
     sales = services.get_customer_sales(db=db, customer_id=customer_id)
     if not sales:
         raise HTTPException(status_code=404, detail="No purchase history found for this customer.")

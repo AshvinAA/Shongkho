@@ -1,16 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
-from typing import List
+"""
+Product (inventory) routes.
+
+Permissions at a glance:
+  - POST /, PUT /{id}, DELETE /{id}, PATCH /{id}/stock, POST /{id}/photo  -> owner only
+  - GET /, GET /{id}, GET /search, GET /categories                        -> both roles
+"""
 import os
 import time
-import services
-import schemas
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
+from typing import List
+
 import deps
+import models
+import schemas
+import services
 from database import get_db
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+# Content types we accept for product pictures, mapped to file extensions.
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
 
 
 @router.post("/", response_model=schemas.ProductResponse)
@@ -34,56 +50,13 @@ def get_products(
     return services.get_products(db=db, skip=skip, limit=limit)
 
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
-
-
-@router.post("/{product_id}/photo", response_model=schemas.ProductResponse)
-def upload_product_photo(
-    product_id: int,
-    file: UploadFile = File(...),
-    current_user=Depends(deps.require_owner),   # OWNER ONLY
-    db: Session = Depends(get_db),
-):
-    """Owner-only: upload a picture for a product and set it as its photo."""
-    ext = ALLOWED_IMAGE_TYPES.get(file.content_type)
-    if not ext:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP or GIF images are allowed.")
-
-    contents = file.file.read()
-    if len(contents) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image too large (max 2 MB).")
-
-    upload_dir = os.path.join("static", "product_pics")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    product = services.get_product(db=db, product_id=product_id)
-
-    # Remove the previous picture (only files we manage)
-    if product.photo and product.photo.startswith("/static/product_pics/"):
-        old_path = product.photo.lstrip("/")
-        if os.path.isfile(old_path):
-            try:
-                os.remove(old_path)
-            except OSError:
-                pass
-
-    filename = f"product_{product_id}{ext}"
-    file_path = os.path.join(upload_dir, filename)
-    with open(file_path, "wb") as out:
-        out.write(contents)
-
-    product.photo = f"/static/product_pics/{filename}?v={int(time.time())}"
-    db.commit()
-    db.refresh(product)
-    return product
-
-
 @router.get("/search/", response_model=List[schemas.ProductResponse])
 def search_products(
     query: str,
     current_user=Depends(deps.require_any),
     db: Session = Depends(get_db),
 ):
+    """Search products by name or category (both roles)."""
     results = services.search_products(db=db, search_term=query)
     if not results:
         raise HTTPException(status_code=404, detail="No products found matching that search.")
@@ -96,7 +69,13 @@ def get_categories(
     db: Session = Depends(get_db),
 ):
     """Distinct category names already used by products (for autocomplete)."""
-    rows = db.query(models.Product.category).filter(models.Product.category.isnot(None)).distinct().all()
+    rows = (
+        db.query(models.Product.category)
+        .filter(models.Product.category.isnot(None))
+        .distinct()
+        .all()
+    )
+    # Deduplicate + sort; ignore blank/whitespace-only categories.
     categories = sorted({(row[0] or "").strip() for row in rows if row[0] and row[0].strip()})
     return categories
 
@@ -128,7 +107,7 @@ def delete_product(
     current_user=Depends(deps.require_owner),   # OWNER ONLY
     db: Session = Depends(get_db),
 ):
-    """Owner-only: remove a product."""
+    """Owner-only: remove a product (refused if it has sales)."""
     return services.delete_product(db=db, product_id=product_id)
 
 
@@ -139,7 +118,7 @@ def update_stock(
     current_user=Depends(deps.require_owner),   # OWNER ONLY
     db: Session = Depends(get_db),
 ):
-    """Owner-only: update stock (+/-)."""
+    """Owner-only: adjust stock by a delta (+/-), never below zero."""
     return services.update_stock(db=db, product_id=product_id, quantity_change=payload.quantity_change)
 
 
@@ -150,9 +129,12 @@ def upload_product_photo(
     current_user=Depends(deps.require_owner),   # OWNER ONLY
     db: Session = Depends(get_db),
 ):
-    """Owner-only: upload (or replace) the product picture."""
-    product = services.get_product(db=db, product_id=product_id)
+    """
+    Owner-only: upload (or replace) the product picture.
 
+    The file is stored under backend/static/product_pics/ and the DB row
+    keeps a cache-busting URL (/static/product_pics/product_{id}.jpg?v=...).
+    """
     ext = ALLOWED_IMAGE_TYPES.get(file.content_type)
     if not ext:
         raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP or GIF images are allowed.")
@@ -161,10 +143,9 @@ def upload_product_photo(
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image too large (max 5 MB).")
 
-    upload_dir = os.path.join("static", "product_pics")
-    os.makedirs(upload_dir, exist_ok=True)
+    product = services.get_product(db=db, product_id=product_id)
 
-    # Remove the previous picture (only files we manage)
+    # Delete the previous picture (only files we manage) to save disk.
     if product.photo and product.photo.startswith("/static/product_pics/"):
         old_path = product.photo.split("?")[0].lstrip("/")
         if os.path.isfile(old_path):
@@ -173,11 +154,14 @@ def upload_product_photo(
             except OSError:
                 pass
 
+    upload_dir = os.path.join(deps.BASE_DIR, "static", "product_pics")
+    os.makedirs(upload_dir, exist_ok=True)
+
     filename = f"product_{product_id}{ext}"
-    file_path = os.path.join(upload_dir, filename)
-    with open(file_path, "wb") as out:
+    with open(os.path.join(upload_dir, filename), "wb") as out:
         out.write(contents)
 
-    # Cache-busting version so browsers refresh the image after an edit
-    updates = schemas.ProductUpdate(photo=f"/static/product_pics/{filename}?v={int(time.time())}")
+    # Cache-busting version so browsers refresh the image after an edit.
+    photo_url = f"/static/product_pics/{filename}?v={int(time.time())}"
+    updates = schemas.ProductUpdate(photo=photo_url)
     return services.update_product(db=db, product_id=product_id, updates=updates)

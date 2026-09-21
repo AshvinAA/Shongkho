@@ -45,6 +45,9 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
+    } catch {
+      // The server call failed (offline, session already gone) — the
+      // local logout must still succeed so the UI never gets stuck.
     } finally {
       setUser(null)
     }

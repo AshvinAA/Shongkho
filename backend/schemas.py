@@ -1,35 +1,53 @@
-from pydantic import BaseModel, ConfigDict, Field
+"""
+Pydantic schemas: the shape of data entering and leaving the API.
+
+Three kinds of schema live here:
+  - *Create  — payloads accepted from clients (validated, price fields
+               deliberately EXCLUDED so clients can never set prices)
+  - *Update  — partial-update payloads (every field optional)
+  - *Response — what we send back (from_attributes lets Pydantic read
+               straight from SQLAlchemy model objects)
+"""
 from typing import List, Optional
 from datetime import date, time
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ---------------------------------------------------------
 # 1. PRODUCT SCHEMAS
 # ---------------------------------------------------------
-
 class ProductBase(BaseModel):
-    product_name: str
-    cost_price: float = Field(ge=0)      # prices cannot be negative
+    product_name: str = Field(min_length=1)     # reject empty names
+    cost_price: float = Field(ge=0)             # prices cannot be negative
     retail_price: float = Field(ge=0)
-    stock_quantity: int = Field(default=0, ge=0)
+    stock_quantity: int = Field(default=0, ge=0)  # stock cannot be negative
     category: Optional[str] = None
     supplier_name: Optional[str] = None
-    photo: Optional[str] = None          # product picture URL (or data URI)
+    photo: Optional[str] = None                 # product picture URL (or data URI)
+
+    @field_validator("product_name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        """min_length alone still allows '   ' — reject whitespace-only names."""
+        if not v.strip():
+            raise ValueError("Product name cannot be blank")
+        return v
 
 
 class ProductCreate(ProductBase):
-    pass  # Used when creating a new product from the frontend
+    """Payload for POST /products (owner-only)."""
+
 
 class ProductResponse(ProductBase):
     product_id: int
     date: date
 
-    # Allows Pydantic to read data directly from SQLAlchemy models
     model_config = ConfigDict(from_attributes=True)
 
 
 class ProductUpdate(BaseModel):
     """Owner-only: partial update of a product."""
-    product_name: Optional[str] = None
+    product_name: Optional[str] = Field(None, min_length=1)
     cost_price: Optional[float] = Field(None, ge=0)
     retail_price: Optional[float] = Field(None, ge=0)
     stock_quantity: Optional[int] = Field(None, ge=0)
@@ -39,11 +57,16 @@ class ProductUpdate(BaseModel):
 
 
 class StockUpdate(BaseModel):
-    """Owner-only: adjust stock by a delta (can be negative)."""
+    """
+    Owner-only: adjust stock by a delta (can be negative, e.g. -3 after
+    breakage). The service layer refuses to let stock go below zero.
+    """
     quantity_change: int
-    
 
 
+# ---------------------------------------------------------
+# 2. AUTH SCHEMAS
+# ---------------------------------------------------------
 class UserLogin(BaseModel):
     phone_number: str
     password: str
@@ -59,31 +82,48 @@ class PasswordResetConfirm(BaseModel):
 
 
 class RegisterResponse(BaseModel):
+    """Public shape of a freshly registered account (no password!)."""
     user_id: int
     name: str
     phone_number: str
     user_type: str
+
     model_config = ConfigDict(from_attributes=True)
 
+
 # ---------------------------------------------------------
-# CUSTOMER SCHEMAS
+# 3. CUSTOMER SCHEMAS
 # ---------------------------------------------------------
 class CustomerBase(BaseModel):
-    name: str
+    name: str = Field(min_length=1)
     phone_number: Optional[str] = None
 
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        """Reject whitespace-only customer names."""
+        if not v.strip():
+            raise ValueError("Customer name cannot be blank")
+        return v
+
+
 class CustomerCreate(CustomerBase):
-    pass
+    """Payload for POST /customers (POS quick-add, both roles)."""
+
 
 class CustomerResponse(CustomerBase):
     customer_id: int
+
     model_config = ConfigDict(from_attributes=True)
-    
+
+
 class CustomerUpdate(BaseModel):
-    name: str
+    """Partial edit of a customer record."""
+    name: Optional[str] = Field(None, min_length=1)
+
 
 # ---------------------------------------------------------
-# 3. EMPLOYEE / USER SCHEMAS
+# 4. EMPLOYEE / USER SCHEMAS
 # ---------------------------------------------------------
 class UserBase(BaseModel):
     name: str
@@ -93,32 +133,39 @@ class UserBase(BaseModel):
 
 
 class EmployeeCreate(BaseModel):
+    """
+    Registration payload (shared by owner/employee signup).
+
+    The name is historical: it carries `role` ('owner' | 'employee') plus
+    the employee-only fields employer_id / position / salary.
+    """
     name: str
     phone_number: str
-    role: str       # They will select "owner" or "employee"
-    password: str   # The raw password from the frontend
-    employer_id: Optional[int] = None   # Employees must register under an existing owner
+    role: str                     # 'owner' or 'employee'
+    password: str                 # raw password from the frontend (hashed server-side)
+    employer_id: Optional[int] = None  # employees must reference an existing owner
     position: Optional[str] = None
-    salary: Optional[float] = None
+    salary: Optional[float] = Field(None, ge=0)  # salary cannot be negative
 
 
 class EmployeeUpdate(BaseModel):
-    """Owner-only: update employee info / role."""
+    """Owner-only: update employee info and/or role (owner <-> employee)."""
     name: Optional[str] = None
     phone_number: Optional[str] = None
     position: Optional[str] = None
-    salary: Optional[float] = None
-    role: Optional[str] = None   # promote/demote between owner and employee
+    salary: Optional[float] = Field(None, ge=0)
+    role: Optional[str] = None    # 'owner' or 'employee' — promotes/demotes
 
 
 class ProfileUpdate(BaseModel):
     """Self-service profile edit (own account, both roles)."""
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1)
     phone_number: Optional[str] = None
     photo: Optional[str] = None   # profile picture URL (or data URI)
 
 
 class EmployeeResponse(BaseModel):
+    """Employee row as the owner sees it in /staff."""
     user_id: int
     name: str
     phone_number: str
@@ -129,8 +176,7 @@ class EmployeeResponse(BaseModel):
     photo: Optional[str] = None
     date_appointed: Optional[date] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MyStoreResponse(BaseModel):
@@ -146,21 +192,23 @@ class MyStoreResponse(BaseModel):
 
 
 class EmployeePerformance(BaseModel):
+    """One employee's lifetime sales stats (owner's performance view)."""
     employee_id: int
     employee_name: str
     total_sales: int
     total_revenue: float
     total_profit: float
 
+
 # ---------------------------------------------------------
-# 4. SALE & CHECKOUT SCHEMAS
+# 5. SALE & CHECKOUT SCHEMAS
 # ---------------------------------------------------------
 class SaleItemCreate(BaseModel):
     product_id: int
-    quantity: int = Field(ge=1)  # must buy at least one
-    # We do NOT ask the frontend for the price to prevent hacking.
-    # We will fetch the secure price from the DB in our business logic!
+    quantity: int = Field(ge=1)   # must buy at least one
 
+    # NOTE: we deliberately do NOT accept prices here. The frontend never
+    # sets prices — the backend reads authoritative prices from the DB.
 
 
 class SaleItemResponse(BaseModel):
@@ -168,15 +216,16 @@ class SaleItemResponse(BaseModel):
     quantity: int
     retail_price_at_sale: float
     cost_price_at_sale: float
+
     model_config = ConfigDict(from_attributes=True)
 
 
-
 class SaleCreate(BaseModel):
-    employee_id: Optional[int] = None   # Filled from the session when missing
+    """Checkout payload. employee_id is filled from the session server-side."""
+    employee_id: Optional[int] = None
     customer_id: int
-    payment_method: str
-    items: List[SaleItemCreate]  # A list of the items being purchased
+    payment_method: str = Field(min_length=1)
+    items: List[SaleItemCreate] = Field(min_length=1)  # at least one line item
 
 
 class SaleSummary(BaseModel):
@@ -189,6 +238,7 @@ class SaleSummary(BaseModel):
     total_profit: float
     employee_id: Optional[int] = None
     customer_id: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -198,6 +248,7 @@ class CustomerSpendResponse(CustomerResponse):
 
 
 class ReportResponse(BaseModel):
+    """Owner's daily/weekly/monthly totals."""
     period: str
     start_date: date
     end_date: date
@@ -207,6 +258,7 @@ class ReportResponse(BaseModel):
 
 
 class ReceiptResponse(BaseModel):
+    """Printable receipt for one transaction (items are plain dicts)."""
     transaction_id: int
     date: date
     time: time
@@ -218,22 +270,24 @@ class ReceiptResponse(BaseModel):
     customer_phone: Optional[str] = None
     items: List[dict]
 
+
 class SaleResponse(BaseModel):
+    """Full sale record returned right after checkout."""
     transaction_id: int
     date: date
     time: time
     payment_method: str
     total_revenue: float
     total_profit: float
-    employee_id: int
+    employee_id: Optional[int] = None
     customer_id: int
     items: List[SaleItemResponse]
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------
-# 5. STORE CHAT SCHEMAS
+# 6. STORE CHAT SCHEMAS
 # ---------------------------------------------------------
 class ChatMessageCreate(BaseModel):
     """Send a message to the store group chat."""
@@ -242,14 +296,17 @@ class ChatMessageCreate(BaseModel):
 
 
 class ChatSender(BaseModel):
+    """The author of a chat message (owner or employee)."""
     user_id: int
     name: str
     user_type: str
     photo: Optional[str] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class ChatReplyPreview(BaseModel):
+    """Quoted message preview shown above a reply."""
     message_id: int
     sender_name: Optional[str] = None
     body: str
@@ -257,6 +314,7 @@ class ChatReplyPreview(BaseModel):
 
 
 class ChatMessageResponse(BaseModel):
+    """One chat message as rendered in the client."""
     message_id: int
     sender: ChatSender
     body: str
@@ -265,8 +323,5 @@ class ChatMessageResponse(BaseModel):
     deleted: bool = False
     date: date
     time: time
+
     model_config = ConfigDict(from_attributes=True)
-
-
-
-

@@ -1,12 +1,24 @@
+"""
+Sales & checkout routes.
+
+The checkout endpoint is the POS core: the session user becomes the
+recorded seller (never the request body), and the service layer handles
+stock validation and atomic totals.
+"""
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+
+import deps
 import schemas
 import services
-import deps
 from database import get_db
 
+# Checkout and sales listing live on separate routers because their
+# prefixes differ (/checkout vs /sales) but share one domain.
 router = APIRouter(prefix="/checkout", tags=["Sales & Checkout"])
+sales_router = APIRouter(prefix="/sales", tags=["Sales & Checkout"])
 
 
 @router.post("/", response_model=schemas.SaleResponse)
@@ -15,20 +27,17 @@ def process_checkout(
     current_user=Depends(deps.require_any),     # both roles can ring up sales
     db: Session = Depends(get_db),
 ):
-    """Checkout — employee identity is taken from the session, never the body."""
+    """
+    Checkout: validate cart, deduct stock, record the sale — atomically.
+
+    Employee identity comes from the session, prices from the DB.
+    """
     try:
-        new_sale = services.create_sale(db=db, sale_data=sale_data, current_user=current_user)
-        return new_sale
+        return services.create_sale(db=db, sale_data=sale_data, current_user=current_user)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - surface a clean 400, not a 500
         raise HTTPException(status_code=400, detail=f"Checkout failed: {str(e)}")
-
-
-# ---------------------------------------------------------
-# Sales history & receipts (shared router for listing)
-# ---------------------------------------------------------
-sales_router = APIRouter(prefix="/sales", tags=["Sales & Checkout"])
 
 
 @sales_router.get("/", response_model=List[schemas.SaleSummary])
@@ -58,9 +67,13 @@ def get_receipt(
     current_user=Depends(deps.require_any),
     db: Session = Depends(get_db),
 ):
-    """Receipt for one transaction. Employees can only view their own."""
+    """
+    Receipt for one transaction.
+
+    Employees may only view receipts for sales THEY processed; owners
+    can view every receipt.
+    """
     receipt = services.get_sale_receipt(db=db, transaction_id=transaction_id)
     if current_user["role"] != "owner" and receipt.get("employee_id") != current_user["id"]:
-        # employee looking at someone else's receipt
         raise HTTPException(status_code=403, detail="You can only view your own receipts")
     return receipt
