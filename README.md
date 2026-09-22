@@ -6,31 +6,7 @@ fully decoupled. The SPA talks to the API over `/api/v1/*` same-origin
 
 ## Structure
 
-```
-Shongkho/
-├── backend/            # FastAPI application
-│   ├── main.py         # App wiring: middleware, static, routers
-│   ├── database.py     # Engine/session factory, get_db dependency
-│   ├── models.py       # SQLAlchemy models (joined-table inheritance)
-│   ├── schemas.py      # Pydantic request/response schemas
-│   ├── services.py     # ALL business logic (auth, inventory, sales…)
-│   ├── deps.py         # Auth gates: get_current_user / require_owner / require_any
-│   ├── routes/         # Thin route handlers, one file per domain
-│   ├── static/         # Uploaded images (product_pics/, profile_pics/)
-│   ├── tests/          # Pytest suite (isolated SQLite per test)
-│   └── requirements.txt
-├── frontend/           # React SPA
-│   └── src/
-│       ├── api/        # Fetch wrappers per domain (client.js is the core)
-│       ├── components/ # Reusable UI (RoleGate, Modal, Avatar, …)
-│       ├── context/    # AuthContext (session hydration, login/logout)
-│       ├── pages/      # POS, Inventory, Dashboard, Staff, Customers, …
-│       └── test/       # Vitest + React Testing Library suite
-├── docs/
-│   └── ANALYTICS_SETUP.md  # Analytics pipeline: architecture + local setup
-├── .gitignore
-└── README.md
-```
+
 
 ## Running
 
