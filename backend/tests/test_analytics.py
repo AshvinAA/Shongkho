@@ -147,6 +147,40 @@ class TestAggregateEmployees:
         assert payload["employees"][1]["revenue"] == 0.0
         assert payload["employees"][1]["change_pct"]["revenue"] == -100.0
 
+    def test_race_series_cumulative(self, db_session):
+        """
+        The 'race over time' series: cumulative revenue per employee per
+        bucket, string keys (JSON object keys are strings after the
+        snapshot round-trip), empty buckets advancing the cumulative sum.
+        """
+        # Emp 1 sells today at 10:00 and 15:00; emp 2 only at 15:00.
+        _sale(db_session, 1, _at(hour=10), 100.0, 30.0)
+        _sale(db_session, 1, _at(hour=15), 50.0, 15.0)
+        _sale(db_session, 2, _at(hour=15), 40.0, 12.0)
+        db_session.commit()
+
+        payload = aggregators.aggregate_employees(
+            db_session.query(models.Sale).all(),
+            [
+                models.Employee(user_id=1, name="Rahim", user_type="employee"),
+                models.Employee(user_id=2, name="Karim", user_type="employee"),
+            ],
+            "day", date.today(),
+        )
+        rs = payload["race_series"]
+        assert rs["keys"] == [str(h) for h in range(24)]
+        assert rs["labels"][10] == "10:00"
+        # Emp 1: cumulative 100 after hour 10, 150 after hour 15.
+        assert rs["revenue"]["1"][10] == 100.0
+        assert rs["revenue"]["1"][15] == 150.0
+        assert rs["revenue"]["1"][9] == 0.0   # before first sale
+        assert rs["revenue"]["1"][23] == 150.0  # holds to the end
+        # Emp 2: flat zero until hour 15, then 40.
+        assert rs["revenue"]["2"][14] == 0.0
+        assert rs["revenue"]["2"][15] == 40.0
+        # Profit series parallels revenue.
+        assert rs["profit"]["1"][15] == 45.0
+
     def test_detached_sales_are_skipped(self, db_session):
         _sale(db_session, None, _at(hour=10), 90.0, 20.0)
         db_session.commit()

@@ -159,6 +159,34 @@ fabricated +∞.
 | `/api/v1/analytics/run/{id}/status` | GET | owner | `{status, failure_reason, ...}` — poll this |
 | `/api/v1/analytics/dashboard?period=week` | GET | owner | latest completed snapshot per section |
 
+## Demo data (edwinzaman store)
+
+A seeder populates a realistic store so every period view has real
+shape (weekday/weekend patterns, lunch+evening peaks, per-employee
+skill differences, month-over-month growth, seasonal products):
+
+```bash
+cd backend
+python seed_demo_data.py          # idempotent: skips if data exists
+python seed_demo_data.py --force  # WIPE everything and reseed
+```
+
+What you get:
+
+| Account | Login | Password |
+|---|---|---|
+| Edwin Zaman (owner) | `edwinzaman` | `shongkho123` |
+| Rahim Uddin, Karim Ahmed, Sumi Akter, Tanvir Hasan (employees) | `01711111101`…`04` | `shongkho123` |
+
+Plus 12 products, 13 customers, and ~3,600 sales across ~4 months
+ending today. Employees get SVG initial-avatars seeded into
+`users.photo`, so the race chart, staff page, and navbar all show
+them. Storyline baked in: Rahim leads, Sumi has a visible slump this
+week, cold drinks trend up in hot months.
+
+After seeding, open Analytics as Edwin and hit **▶ Run analysis** for
+each period you want to view.
+
 ## Tests
 
 ```bash

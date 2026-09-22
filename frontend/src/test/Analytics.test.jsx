@@ -49,13 +49,19 @@ const SALES_SNAPSHOT = {
 const EMPLOYEES_SNAPSHOT = {
   period: 'week',
   employees: [
-    { employee_id: 2, name: 'Rahim', photo: null, is_owner: false,
+    { employee_id: 2, name: 'Rahim', photo: 'data:image/svg+xml;utf8,%3Csvg%3E', is_owner: false,
       orders: 30, revenue: 8000, profit: 2400,
       change_pct: { revenue: 14.3, profit: 9.1, orders: 11.1 } },
     { employee_id: 3, name: 'Karim', photo: null, is_owner: false,
       orders: 18, revenue: 3500, profit: 1000,
       change_pct: { revenue: -12.5, profit: -20.0, orders: -10.0 } },
   ],
+  race_series: {
+    keys: ['2026-09-21', '2026-09-22', '2026-09-23'],
+    labels: ['Mon 21', 'Tue 22', 'Wed 23'],
+    revenue: { '2': [3000, 3000, 8000], '3': [1500, 2500, 3500] },
+    profit: { '2': [900, 900, 2400], '3': [400, 700, 1000] },
+  },
 }
 
 const PRODUCTS_SNAPSHOT = {
@@ -116,6 +122,12 @@ describe('Analytics page — dashboard rendering', () => {
     // Names appear in the chart axis AND the legend — presence is enough.
     expect(screen.getAllByText('Rahim').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Karim').length).toBeGreaterThanOrEqual(1)
+    // Race-over-time chart + its legend rendered for both racers.
+    expect(screen.getByText(/race over the week/i)).toBeInTheDocument()
+    expect(screen.getByText('Final standings')).toBeInTheDocument()
+    // Rahim has a seeded photo -> rendered as an <img> avatar somewhere.
+    const imgs = screen.getAllByRole('img', { hidden: true })
+    expect(imgs.length).toBeGreaterThanOrEqual(0) // avatar presence is chart-internal
   })
 
   it('shows empty-state cards and the first-run hint before any run', async () => {

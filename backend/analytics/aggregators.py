@@ -148,6 +148,47 @@ def aggregate_sales(sales, period: str, today) -> dict:
 # ---------------------------------------------------------
 # 2. EMPLOYEES
 # ---------------------------------------------------------
+def aggregate_race_series(sales, period: str, today) -> dict:
+    """
+    Cumulative revenue/profit per employee across the period's buckets
+    — the data behind the "race over time" line chart (avatars drift
+    apart as the period progresses).
+
+    Keys are STRING employee ids: JSON object keys are always strings,
+    and the snapshot round-trips through storage. Buckets include the
+    empty ones so the lines advance tick-by-tick like a real race.
+    """
+    current, _ = _split_windows(sales, period, today)
+
+    rev_by = {}   # employee_id -> {bucket_key: revenue}
+    prof_by = {}  # employee_id -> {bucket_key: profit}
+    for sale in current:
+        if sale.employee_id is None:
+            continue
+        key = bucket_key(_when(sale), period)
+        rev_by.setdefault(sale.employee_id, {})
+        prof_by.setdefault(sale.employee_id, {})
+        rev_by[sale.employee_id][key] = rev_by[sale.employee_id].get(key, 0.0) + (sale.total_revenue or 0.0)
+        prof_by[sale.employee_id][key] = prof_by[sale.employee_id].get(key, 0.0) + (sale.total_profit or 0.0)
+
+    keys, labels = bucket_series(period, *period_bounds(today, period)[:2])
+
+    def cumulative(by_key):
+        out = {}
+        for employee_id, cells in by_key.items():
+            series, running = [], 0.0
+            for key in keys:
+                running += cells.get(key, 0.0)
+                series.append(_money(running))
+            out[str(employee_id)] = series
+        return out
+
+    return {
+        "keys": [str(k) for k in keys],
+        "labels": [labels[k] for k in keys],
+        "revenue": cumulative(rev_by),
+        "profit": cumulative(prof_by),
+    }
 def aggregate_employees(sales, participants, period: str, today) -> dict:
     """
     Employee race payload, current vs previous period per participant.
@@ -211,6 +252,7 @@ def aggregate_employees(sales, participants, period: str, today) -> dict:
     return {
         "period": period,
         "employees": lanes,
+        "race_series": aggregate_race_series(sales, period, today),
         "window": _window_meta(period, today),
     }
 
