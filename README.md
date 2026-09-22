@@ -4,7 +4,6 @@ A small-shop point-of-sale system: FastAPI backend + React (Vite) frontend,
 fully decoupled. The SPA talks to the API over `/api/v1/*` same-origin
 (development proxy) with signed-cookie sessions.
 
-## Structure
 
 
 
