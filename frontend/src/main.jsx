@@ -17,6 +17,7 @@ import Customers from './pages/Customers.jsx'
 import Staff from './pages/Staff.jsx'
 import Chat from './pages/Chat.jsx'
 import Profile from './pages/Profile.jsx'
+import Analytics from './pages/Analytics.jsx'
 import './styles.css'
 
 const router = createBrowserRouter([
@@ -50,6 +51,14 @@ const router = createBrowserRouter([
       { path: 'pos', element: <POS /> },
       { path: 'inventory', element: <Inventory /> },
       { path: 'sales', element: <Sales /> },
+      {
+        path: 'analytics',
+        element: (
+          <RoleGate allowedRoles={['owner']} fallback={<p className="muted">Owners only.</p>}>
+            <Analytics />
+          </RoleGate>
+        ),
+      },
       { path: 'customers', element: <Customers /> },
       { path: 'chat', element: <Chat /> },
       { path: 'profile', element: <Profile /> },

@@ -13,11 +13,15 @@ Model map (who stores what):
   products                — inventory (prices, stock, category, photo)
   sales / sale_items      — transactions and their line items (bridge table)
   chat_messages           — the store's WhatsApp-style group chat
+  analysis_runs           — analytics "Run Analysis" lifecycle + lock
+  analytics_snapshots     — frozen, versioned analytics results per run
 """
+import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
     Column, Integer, String, Float, ForeignKey, Date, Time, Text,
+    DateTime, JSON, UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -216,3 +220,67 @@ class ChatMessage(Base):
 
     sender = relationship("User", foreign_keys=[sender_id], viewonly=True)
     reply_to = relationship("ChatMessage", remote_side=[message_id], viewonly=True)
+
+
+# ---------------------------------------------------------
+# 5. ANALYTICS (Track A: batch analysis pipeline)
+# ---------------------------------------------------------
+
+def _uuid() -> str:
+    """Fresh UUID string for analysis run ids."""
+    return str(uuid.uuid4())
+
+
+class AnalysisRun(Base):
+    """
+    One "Run Analysis" click — lifecycle record AND concurrency lock.
+
+    Lifecycle: QUEUED -> RUNNING -> COMPLETED | FAILED.
+
+    Locking rule: POST /analytics/run is rejected with 409 while any row
+    for this owner is QUEUED or RUNNING, so two runs can never race.
+    failure_reason is filled on FAILED (including watchdog timeouts).
+    """
+    __tablename__ = 'analysis_runs'
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    owner_id = Column(Integer, ForeignKey('owners.user_id'), index=True, nullable=False)
+
+    status = Column(String(20), nullable=False, default='QUEUED')
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    failure_reason = Column(Text, nullable=True)
+
+
+class AnalyticsSnapshot(Base):
+    """
+    Frozen, versioned analytics output — one row per run/section/period.
+
+    Insert-per-run (never update-in-place):
+      - The "+X% vs last period" delta can also be computed across runs.
+      - History accumulates for free (trend across many runs).
+      - UNIQUE(run_id, section, period_type) prevents double writes.
+
+    The dashboard read path is always "latest completed row per
+    section/period for this owner" — a single indexed lookup, never a
+    live aggregation. `data` holds the section's JSON payload (already
+    pruned to what the charts need).
+    """
+    __tablename__ = 'analytics_snapshots'
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(String(36), ForeignKey('analysis_runs.id'), nullable=False)
+    owner_id = Column(Integer, ForeignKey('owners.user_id'), index=True, nullable=False)
+
+    # 'sales' | 'employees' | 'products' | 'insights'
+    section = Column(String(20), nullable=False)
+    # 'day' | 'week' | 'month'
+    period_type = Column(String(10), nullable=False)
+
+    data = Column(JSON, nullable=False)
+    generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('run_id', 'section', 'period_type',
+                         name='uq_snapshot_run_section_period'),
+    )

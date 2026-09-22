@@ -38,6 +38,9 @@ export default function Navbar() {
           <NavLink to="/staff" className={({ isActive }) => (isActive ? 'active' : '')}>
             Staff
           </NavLink>
+          <NavLink to="/analytics" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Analytics
+          </NavLink>
         </RoleGate>
       </nav>
 
