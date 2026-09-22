@@ -138,6 +138,260 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap;
 }
 
+/* ============================================================
+   Analytics (Track A)
+   ============================================================ */
+.analytics-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.analytics-section {
+  margin-bottom: 1.5rem;
+}
+
+.analytics-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+.analytics-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.stat-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.stat-box {
+  flex: 1 1 160px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b7280);
+}
+
+.stat-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.stat-sub {
+  font-size: 0.8rem;
+}
+
+.chart-wrap {
+  position: relative;
+}
+
+.card-sub {
+  flex: 1 1 220px;
+}
+
+.best-grid {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.best-grid h4 {
+  margin-bottom: 0.35rem;
+}
+
+.best-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.best-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 0.25rem;
+}
+
+/* Segmented control (day/week/month · revenue/profit) */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented-btn {
+  padding: 0.4rem 0.85rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: inherit;
+}
+
+.segmented-btn + .segmented-btn {
+  border-left: 1px solid var(--border);
+}
+
+.segmented-active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.segmented-disabled {
+  opacity: 0.6;
+}
+
+/* Delta chips */
+.delta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.delta-up {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success, #16a34a);
+}
+
+.delta-down {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--danger, #dc2626);
+}
+
+.delta-neutral {
+  background: rgba(107, 114, 128, 0.12);
+  color: var(--muted, #6b7280);
+}
+
+.delta-label {
+  font-weight: 400;
+  font-size: 0.78rem;
+}
+
+/* Employee race */
+.race-avatars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.race-avatar-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.race-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--surface, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.race-avatar-lead {
+  border-color: var(--warning, #f59e0b);
+}
+
+.race-flag {
+  font-size: 0.9rem;
+}
+
+.race-tooltip {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.race-legend {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.race-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Top products ranking badges */
+.rank {
+  font-weight: 700;
+  color: var(--muted, #6b7280);
+}
+
+.rank-1 { color: #d97706; }
+.rank-2 { color: #6b7280; }
+.rank-3 { color: #b45309; }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.empty-section {
+  text-align: left;
+}
+
+.analytics-first-run {
+  margin-bottom: 1rem;
+}
+
+.alert-info {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  color: var(--primary, #2563eb);
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

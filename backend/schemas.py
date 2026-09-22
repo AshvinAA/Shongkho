@@ -8,8 +8,8 @@ Three kinds of schema live here:
   - *Response — what we send back (from_attributes lets Pydantic read
                straight from SQLAlchemy model objects)
 """
-from typing import List, Optional
-from datetime import date, time
+from typing import Any, Dict, List, Optional
+from datetime import date, datetime, time
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -325,3 +325,33 @@ class ChatMessageResponse(BaseModel):
     time: time
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------
+# 7. ANALYTICS SCHEMAS (Track A)
+# ---------------------------------------------------------
+
+class RunStartRequest(BaseModel):
+    """Payload for POST /analytics/run."""
+    period: str = Field(default="week", pattern="^(day|week|month)$")
+
+
+class RunStatusResponse(BaseModel):
+    """Poll target for the run lifecycle (dashboard shows progress from this)."""
+    run_id: str
+    status: str                      # QUEUED | RUNNING | COMPLETED | FAILED
+    period: Optional[str] = None     # carried for the poller's convenience
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    failure_reason: Optional[str] = None
+
+
+class AnalyticsDashboardResponse(BaseModel):
+    """
+    Latest completed snapshot per section. `sections` maps section name ->
+    the section's stored JSON payload verbatim; sections with no completed
+    run yet are simply absent (the UI shows an empty-state per section).
+    """
+    period: str
+    generated_at: Optional[datetime] = None
+    sections: Dict[str, Any] = Field(default_factory=dict)

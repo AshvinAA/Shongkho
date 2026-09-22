@@ -10,6 +10,10 @@ bcrypt           # password hashing
 itsdangerous     # signed session cookies
 python-multipart # file uploads
 
+# --- Analytics (Track A pipeline) ---
+celery[redis]    # distributed task queue for the run pipeline
+redis            # broker/backend client (also used for caching later)
+
 # --- Testing ---
 pytest
 pytest-asyncio

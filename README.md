@@ -26,6 +26,8 @@ Shongkho/
 │       ├── context/    # AuthContext (session hydration, login/logout)
 │       ├── pages/      # POS, Inventory, Dashboard, Staff, Customers, …
 │       └── test/       # Vitest + React Testing Library suite
+├── docs/
+│   └── ANALYTICS_SETUP.md  # Analytics pipeline: architecture + local setup
 ├── .gitignore
 └── README.md
 ```
@@ -45,6 +47,10 @@ uvicorn main:app --reload
 ```
 
 The API is now on http://localhost:8000 — docs at /docs.
+
+> **Analytics (Run Analysis pipeline)** needs Redis + a Celery worker on
+> top of the steps above. See [docs/ANALYTICS_SETUP.md](docs/ANALYTICS_SETUP.md)
+> for the three-process local setup and architecture notes.
 
 > **Launching from the project root also works** — a small launcher `main.py`
 > at the repo root re-exports the backend app, so all of these are valid:
