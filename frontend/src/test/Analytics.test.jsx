@@ -64,6 +64,15 @@ const EMPLOYEES_SNAPSHOT = {
   },
 }
 
+const INSIGHTS_SNAPSHOT = {
+  summary: 'Revenue was ৳14,200 this week, up 12.7% versus last week.',
+  observations: [
+    { text: 'Revenue rose 12.7% week over week.', basis: 'current_dto.sales' },
+    { text: 'Karim declined 12.5% on revenue.', basis: 'current_dto.employees.employees' },
+  ],
+  areas_to_watch: ['Margin concentration in a single product line'],
+}
+
 const PRODUCTS_SNAPSHOT = {
   period: 'week',
   top_by_revenue: [
@@ -199,5 +208,61 @@ describe('Analytics page — run lifecycle', () => {
     await user.click(screen.getByRole('button', { name: /Run analysis/ }))
 
     expect(await screen.findByText(/broker down/, {}, { timeout: 6000 })).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------
+// Part A — Business insights card (LLM snapshot)
+// ---------------------------------------------------------
+
+describe('Analytics page — insights card (Part A)', () => {
+  it('renders summary, observations, and areas to watch', async () => {
+    mockDashboard({
+      sales: SALES_SNAPSHOT,
+      employees: EMPLOYEES_SNAPSHOT,
+      products: PRODUCTS_SNAPSHOT,
+      insights: INSIGHTS_SNAPSHOT,
+    })
+    renderAnalytics()
+
+    expect(await screen.findByText('Business insights')).toBeInTheDocument()
+    expect(screen.getByText(/Revenue was ৳14,200 this week/)).toBeInTheDocument()
+    expect(screen.getByText('Revenue rose 12.7% week over week.')).toBeInTheDocument()
+    expect(screen.getByText('Karim declined 12.5% on revenue.')).toBeInTheDocument()
+    expect(screen.getByText('Areas to watch')).toBeInTheDocument()
+    expect(screen.getByText('Margin concentration in a single product line')).toBeInTheDocument()
+  })
+
+  it('renders the degraded state honestly with its reason', async () => {
+    mockDashboard({
+      sales: SALES_SNAPSHOT,
+      insights: { summary: null, degraded: true, degraded_reason: 'LLM budget exceeded: too slow' },
+    })
+    renderAnalytics()
+
+    expect(await screen.findByText('Business insights')).toBeInTheDocument()
+    expect(screen.getByText(/Automated commentary is unavailable/)).toBeInTheDocument()
+    expect(screen.getByText(/Reason: LLM budget exceeded/)).toBeInTheDocument()
+    // Sales section still renders — degradation never hides the data.
+    expect(screen.getByText('Revenue this week')).toBeInTheDocument()
+  })
+
+  it('renders the stage-1 pending placeholder for legacy snapshots', async () => {
+    mockDashboard({
+      sales: SALES_SNAPSHOT,
+      insights: { summary: null, pending: 'Insights arrive with stage 2 (LLM)' },
+    })
+    renderAnalytics()
+
+    expect(await screen.findByText(/Insights arrive with stage 2/)).toBeInTheDocument()
+  })
+
+  it('shows the insights empty state before any run', async () => {
+    mockDashboard({})
+    renderAnalytics()
+
+    expect(
+      await screen.findByText('AI-generated commentary on this period appears after your first run.')
+    ).toBeInTheDocument()
   })
 })

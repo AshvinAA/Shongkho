@@ -8,11 +8,13 @@ python-dotenv
 pydantic
 bcrypt           # password hashing
 itsdangerous     # signed session cookies
-python-multipart # file uploads
-
-# --- Analytics (Track A pipeline) ---
+python-multipart # file uploads# --- Analytics (Track A pipeline) ---
 celery[redis]    # distributed task queue for the run pipeline
 redis            # broker/backend client (also used for caching later)
+
+# --- LLM (Part A insight engine) ---
+# No extra dependency: analytics/llm.py calls the Gemini REST API
+# through the standard library (urllib).
 
 # --- Testing ---
 pytest
