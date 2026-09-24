@@ -386,6 +386,18 @@ at any depth":
    validates against the FULL bundle, so grounding never weakens.
    History reaches the model as rollup statistics, not raw windows.
    Validation-failure reasons now quote the offending basis/text.
+7. **Advisory persona + watch salvage.** The insight voice is a
+   co-pilot, not an analyst: celebrate/flag employees and products BY
+   NAME with one concrete suggestion per point, address the owner as
+   "you", "keep it up" when nothing stands out. Grounding is unchanged.
+   `areas_to_watch` stays qualitative per the doc — numeric entries are
+   now DROPPED (salvage) instead of failing the payload; the doc's
+   checker contract for summary/observations is untouched. Additional
+   small-model tolerances: JSONPath-style citation indices
+   ("…[0].revenue") convert to dotted form (existence still required),
+   and the corrective retry now TEACHES the sign rule (negative
+   change_pct = decline) after live runs showed direction flips
+   repeating verbatim across attempts.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-

@@ -61,7 +61,8 @@ OUTPUT_SCHEMA = {
     "properties": {
         "summary": {
             "type": "string",
-            "description": "2-3 sentences describing this period's performance.",
+            "description": "2-3 sentences telling the owner how TODAY is going "
+                           "and what to do about it, in a friendly direct voice.",
         },
         "observations": {
             "type": "array",
@@ -69,7 +70,9 @@ OUTPUT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "text": {"type": "string",
-                             "description": "One insight; every number must trace to basis."},
+                             "description": "One insight with one concrete "
+                                            "suggestion; every number must trace "
+                                            "to basis. Celebrate or flag by name."},
                     "basis": {"type": "string",
                               "description": "Dotted path into the provided JSON grounding this "
                                              "claim: the SMALLEST subtree that contains EVERY "
@@ -83,7 +86,8 @@ OUTPUT_SCHEMA = {
         "areas_to_watch": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Qualitative risks/trends. No numbers allowed.",
+            "description": "Qualitative risks/trends worth keeping an eye on. "
+                           "No numbers allowed.",
         },
     },
     "required": ["summary", "observations", "areas_to_watch"],
@@ -111,10 +115,19 @@ followed by the fields you used (e.g. `current_dto.sales`, \
 (e.g. `rollup.avg_revenue`) when history exists.
 3. Write numbers exactly as they appear in the data (same digits, commas, \
 decimals). Never compute or round new numbers.
-4. Shape of one good observation (X and Y are placeholders — write the \
-real numbers from the data, never X or Y):
-{"text": "Revenue fell X% to $Y.", "basis": "current_dto.sales"}
-If a sentence would mix two subtrees, split it into two observations.
+4. Voice (placeholders X and Y — write the REAL numbers from the data, \
+never X or Y):
+   {"text": "Employee1 is on fire today — $X in sales! Ask the team to \
+learn from their approach.", "basis": "current_dto.employees"}
+   {"text": "ProductA is doing magnificently — $X profit so far. Have the \
+staff keep offering it.", "basis": "current_dto.products"}
+   {"text": "Sales are struggling today, down X%. Worth checking in with \
+the team on what's going on.", "basis": "current_dto.sales"}
+5. Every observation carries ONE concrete suggestion or a clear takeaway; \
+when nothing stands out, say the day is steady and tell the owner to \
+keep it up. Name employees/products exactly as the data spells them.
+6. areas_to_watch: describe the RISK in words — NEVER any digit. Say \
+"Karim's sales are slipping" NOT "Karim is down 12%".
 """
 
 
@@ -514,7 +527,8 @@ def _prompt(bundle: dict, period: str) -> str:
         f"SMALLEST subtree that contains ALL the numbers used in that text "
         f"(e.g. current_dto.sales when a sentence mixes revenue and a "
         f"percentage; rollup.avg_revenue for the history average). Write "
-        f"numbers exactly as they appear in the data.\n"
+        f"numbers exactly as they appear in the data. Address the owner as "
+        f"\"you\" and give ONE concrete suggestion per point.\n"
         f"{OBSERVATION_RULES}"
         f"Return 1-3 observations and 1-3 areas_to_watch entries.\n\n"
         f"Context bundle (current_dto = this period's aggregates for sales, "
@@ -572,7 +586,11 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
                     f"Return the full corrected JSON. Every number in "
                     f"summary/observation text must be covered by that "
                     f"field's cited basis path (the smallest subtree "
-                    f"containing all its numbers).\n\n{prompt}"
+                    f"containing all its numbers). If a change percentage "
+                    f"in the data is NEGATIVE, sales DECLINED: write the "
+                    f"minus sign or a word like 'fell'/'dropped' — never "
+                    f"say 'up'/'grew' for a negative value, and never "
+                    f"compute new percentages.\n\n{prompt}"
                 )
     except llm.LlmUnavailable as exc:
         return _degrade(str(exc))
@@ -630,6 +648,10 @@ def _normalize_basis(bundle: dict, basis: str, text: str = "") -> str | None:
     nothing at ANY depth, so it can never be let through.
     """
     basis = (basis or "").strip().strip("`").strip()
+    # Notation tolerance: models write JSONPath-style indices
+    # ("…top_by_revenue[0].revenue"). Convert to our dotted form; this
+    # only changes NOTATION — the path still has to exist in the bundle.
+    basis = re.sub(r"\[(\d+)\]", r".\1", basis)
     if _resolve_path(bundle, basis) is not None:
         if _numbers_in(text):
             # Too-narrow-citation repair: keep the deepest level while it
@@ -716,12 +738,21 @@ def _validate_output(output, bundle):
         return None, f"ungrounded number in summary: {summary!r}"
 
     cleaned_watch = []
+    dropped_watch = 0
     for item in watch:
         if not isinstance(item, str) or not item.strip():
             return None, "malformed areas_to_watch entry"
         if _numbers_in(item):
-            return None, "areas_to_watch must be qualitative (no numbers)"
+            # Salvage, not fail: areas_to_watch is decorative (the doc:
+            # qualitative-only). Dropping a numeric entry keeps the
+            # payload available without ever SHOWING an ungrounded
+            # number; summary/observations above stay fully strict.
+            dropped_watch += 1
+            continue
         cleaned_watch.append(item.strip())
+    if dropped_watch:
+        print(f"[insights] salvaged: dropped {dropped_watch} numeric "
+              "areas_to_watch entries")
 
     return {
         "summary": summary.strip(),

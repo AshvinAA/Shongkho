@@ -303,6 +303,20 @@ class TestNumberChecker:
         assert insights._normalize_basis(
             bundle, "current_dto.sales.nonexistent", "Revenue was 100.") is None
 
+    def test_jsonpath_index_notation_resolves(self):
+        """Models write JSONPath-style indices; notation converts, but the
+        path itself must still exist in the bundle."""
+        bundle = {"current_dto": {"products": {
+            "top_by_revenue": [{"name": "A", "revenue": 900.0}]}}}
+        text = "Product A made 900."
+        basis = insights._normalize_basis(
+            bundle, "current_dto.products.top_by_revenue[0].revenue", text)
+        assert basis == "current_dto.products.top_by_revenue.0.revenue"
+        assert insights._check_text(text, bundle, basis)
+        # Notation tolerance is NOT existence tolerance:
+        assert insights._normalize_basis(
+            bundle, "current_dto.products.top_by_revenue[9].revenue", text) is None
+
 
 # ---------------------------------------------------------
 # build_insights — full contract
@@ -371,11 +385,27 @@ class TestBuildInsights:
             {"summary": "x", "observations": [], "areas_to_watch": []},
             {"summary": "x", "observations": [{"text": "t"}], "areas_to_watch": []},
             {"summary": "x", "observations": GOOD_OUTPUT["observations"],
-             "areas_to_watch": ["has 5 numbers"]},                # numbers in watch
+             "areas_to_watch": "not a list"},
         ):
             out = insights.build_insights(_bundle_for_good_output(), "week",
                                           llm_client=FakeLLM(dict(bad)))
             assert out["degraded"] is True, bad
+
+    def test_numeric_watch_entries_salvaged_not_degraded(self, monkeypatch):
+        """areas_to_watch is decorative: numeric entries are DROPPED, the
+        payload survives (3B models quantify watch items constantly).
+        Summary/observations remain fully strict."""
+        monkeypatch.setattr(llm, "api_key", lambda: "k")
+        out = insights.build_insights(
+            _bundle_for_good_output(), "week",
+            llm_client=FakeLLM({
+                "summary": "Revenue was 500 this period, up 25% versus 400.",
+                "observations": GOOD_OUTPUT["observations"],
+                "areas_to_watch": ["Watch margins", "Karim is down 12.4%",
+                                   "Stock is running low"],
+            }))
+        assert "degraded" not in out
+        assert out["areas_to_watch"] == ["Watch margins", "Stock is running low"]
 
     def test_unresolvable_basis_degrades(self, monkeypatch):
         monkeypatch.setattr(llm, "api_key", lambda: "k")
