@@ -503,6 +503,44 @@ class TestPipelineInsights:
 # llm wrapper budget behavior (no network)
 # ---------------------------------------------------------
 
+class TestLlmProviderSelection:
+    """Provider switching: env-driven, no network anywhere here."""
+
+    def test_default_provider_is_gemini(self, monkeypatch):
+        monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        assert llm.provider() == "gemini"
+
+    def test_ollama_provider_from_env(self, monkeypatch):
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        assert llm.provider() == "ollama"
+        assert llm.is_configured() is True  # local: no key required
+
+    def test_ollama_needs_no_key(self, monkeypatch):
+        monkeypatch.setenv("LLM_PROVIDER", "ollama")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+        class _Stub:
+            attempt_timeout_cap = 1.0
+            min_attempt_timeout = 0.5
+
+            def generate_json(self, *a, **k):
+                return None
+
+        monkeypatch.setattr(llm, "_make_client", lambda: _Stub())
+        # Should not raise LlmUnavailable despite the missing key.
+        with pytest.raises(llm.LlmBudgetExceeded):
+            llm.generate_json("p", {}, client=None)
+
+    def test_gemini_without_key_raises_unavailable(self, monkeypatch):
+        monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        monkeypatch.setattr(llm, "api_key", lambda: "")
+        with pytest.raises(llm.LlmUnavailable):
+            llm.generate_json("p", {}, client=None)
+
+    def test_unknown_provider_value_falls_back_to_gemini(self, monkeypatch):
+        monkeypatch.setenv("LLM_PROVIDER", "chatgpt")
+        assert llm.provider() == "gemini"
+
 class TestLlmWrapper:
     def test_tiny_budget_exhausts_without_calling(self, monkeypatch):
         """A budget too small for any attempt raises before network I/O."""
@@ -523,6 +561,9 @@ class TestLlmWrapper:
         calls = []
 
         class NeverValid:
+            attempt_timeout_cap = 2.0
+            min_attempt_timeout = 0.5
+
             def generate_json(self, prompt, schema, *, timeout_s):
                 calls.append(timeout_s)
                 return None  # never valid
@@ -530,8 +571,9 @@ class TestLlmWrapper:
         with pytest.raises(llm.LlmBudgetExceeded):
             llm.generate_json("p", {}, client=NeverValid())
         assert len(calls) == llm.MAX_ATTEMPTS
-        # Per-attempt timeout is capped, never the whole budget.
-        assert all(t <= llm.MAX_ATTEMPT_TIMEOUT_S for t in calls)
+        # Per-attempt timeout is capped by the client class, never the
+        # whole budget.
+        assert all(t <= NeverValid.attempt_timeout_cap for t in calls)
 
     def test_no_key_raises_unavailable(self, monkeypatch):
         monkeypatch.setattr(llm, "api_key", lambda: "")
