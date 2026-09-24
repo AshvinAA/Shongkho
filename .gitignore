@@ -37,3 +37,6 @@ coverage/
 Thumbs.db
 .vscode/
 .idea/
+
+backend/.env
+backend/.env.example 
