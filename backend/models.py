@@ -284,3 +284,38 @@ class AnalyticsSnapshot(Base):
         UniqueConstraint('run_id', 'section', 'period_type',
                          name='uq_snapshot_run_section_period'),
     )
+
+
+# ---------------------------------------------------------
+# 6. CONVERSATIONAL ANALYTICS (Part B: assistant persistence)
+# ---------------------------------------------------------
+class AssistantMessage(Base):
+    """
+    One turn of the conversational analytics assistant (doc §4).
+
+    EVERY turn is persisted — the sliding prompt window is only a
+    PROJECTION of this table, never the storage itself. The rows carry:
+      - the daily cap (counts assistant turns per owner per day),
+      - reload parity with the frontend chat panel,
+      - an audit trail of tool calls, fallbacks and refusals.
+
+    ui_blocks holds the backend-assembled visuals for assistant turns
+    (raw tool results — the LLM never authors them). tool_calls stores
+    names + args ONLY, never results: results are re-fetchable data,
+    and LLM-authored text must not re-enter future prompts as fact.
+    """
+    __tablename__ = 'assistant_messages'
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, index=True, nullable=False)
+
+    # 'user' | 'assistant'
+    role = Column(String(20), nullable=False)
+    message = Column(Text, nullable=False)
+
+    # Assistant turns with visuals: [{type, source_tool, data}]
+    ui_blocks = Column(JSON, nullable=True)
+    # Assistant turns that used tools: [{tool, args}] — names + args only
+    tool_calls = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

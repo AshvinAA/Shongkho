@@ -398,6 +398,31 @@ at any depth":
    and the corrective retry now TEACHES the sign rule (negative
    change_pct = decline) after live runs showed direction flips
    repeating verbatim across attempts.
+8. **Part B shipped (v3.1 scope).** All of §3 is implemented per the
+   doc: `tools.py` (closed 3-tool registry, strict date/metric/limit
+   validation, participant-scoped queries, ValueError = model-facing
+   observation), `assistant.py` (agent loop capped at 5 rounds,
+   window projection of roles+message+tool_names only, daily cap
+   counted from assistant_messages, backend-assembled ui_blocks via
+   the fixed tool->component mapping, narration check reusing Part
+   A's checker), `llm.chat_decide` (final/tool/refuse decision
+   protocol, schema-forced, provider-agnostic), `range_buckets`
+   (daily/weekly/monthly resolution, 60-bucket ceiling), routes
+   (POST /analytics/chat with the 429/503 contract, GET
+   /analytics/chat/history), AssistantMessage persistence, and the
+   frontend panel reusing SalesTrend/EmployeeRace/TopProducts as
+   ui_blocks. Two live-driven deviations from the literal doc text:
+   the narration check is not only a post-hoc gate — the FIRST bad
+   narration earns ONE in-loop self-correction round (an error
+   observation like a tool ValueError, counted against the cap);
+   only a SECOND bad narration swaps in the template. And the
+   decision prompt explicitly forbids answering sales questions from
+   conversation memory — a 3B model will otherwise "remember"
+   numbers instead of calling tools (hosted models comply better).
+   Live batteries: `backend/live_chat_battery.py` (real Ollama
+   end-to-end, multi-turn) alongside `live_ollama_battery.py`.
+   Tool payloads for arbitrary ranges intentionally omit change_pct:
+   there is no like-for-like baseline outside the fixed windows.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-

@@ -99,3 +99,82 @@ def bucket_series(period: str, cur_start: datetime, cur_end: datetime):
         d += timedelta(days=1)
 
     return list(labels.keys()), labels
+
+
+# ---------------------------------------------------------
+# Part B: arbitrary-range bucketing (doc §3.3)
+# ---------------------------------------------------------
+
+def range_buckets(start: date, end: date):
+    """
+    Bucket plan for an ARBITRARY date range (the assistant tools).
+
+    Returns (start_dt, end_dt, keys, labels) where [start_dt, end_dt) is
+    the half-open datetime window covering the range and keys/labels are
+    the ordered bucket keys + display labels, exactly the shapes
+    bucket_key/bucket_series produce:
+
+      span <= 31 days  -> daily buckets   (key = date)
+      span <= 180 days -> weekly buckets  (key = date, Monday-anchored)
+      else             -> monthly buckets (key = (year, month))
+
+    Hard ceiling of 60 buckets (doc §3.3): a two-year daily request
+    degrades to monthly resolution instead of silently answering only
+    the first month.
+
+    Raises ValueError on an inverted or unbounded range — the assistant
+    turns that error text back to the model for self-correction.
+    """
+    if start is None or end is None:
+        raise ValueError("start and end are both required (YYYY-MM-DD strings)")
+    if isinstance(start, datetime):
+        start = start.date()
+    if isinstance(end, datetime):
+        end = end.date()
+    if end < start:
+        raise ValueError("end must be on or after start")
+
+    days = (end - start).days + 1
+    if days <= 31:
+        resolution = "daily"
+    elif days <= 180:
+        resolution = "weekly"
+    else:
+        resolution = "monthly"
+
+    start_dt = datetime.combine(start, time.min)
+    end_dt = datetime.combine(end, time.min) + timedelta(days=1)  # exclusive
+
+    keys, labels = [], {}
+
+    if resolution == "daily":
+        d = start
+        while d <= end:
+            keys.append(d)
+            labels[d] = d.strftime("%b %d")
+            d += timedelta(days=1)
+    elif resolution == "weekly":
+        # Monday-anchored weeks covering [start, end]; keys are the
+        # bucket_key-compatible week-start dates.
+        first_monday = start - timedelta(days=start.weekday())
+        w = first_monday
+        while w <= end:
+            keys.append(w)
+            labels[w] = f"week of {w.strftime('%b %d')}"
+            w += timedelta(days=7)
+    else:  # monthly
+        y, m = start.year, start.month
+        while (y, m) <= (end.year, end.month):
+            keys.append((y, m))
+            labels[(y, m)] = f"{m:02d}/{y}"
+            m += 1
+            if m == 13:
+                m, y = 1, y + 1
+
+    if len(keys) > 60:
+        raise ValueError(
+            f"range too fine: {len(keys)} buckets exceeds the 60-bucket "
+            "ceiling — use a coarser range"
+        )
+
+    return start_dt, end_dt, keys, labels
