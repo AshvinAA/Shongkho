@@ -52,6 +52,11 @@ OLLAMA_ATTEMPT_TIMEOUT_CAP_S = 120.0
 RATE_LIMIT_MAX_WAIT_S = 5.0
 # Bounded generation retries (docs: max 3 LLM calls overall).
 MAX_ATTEMPTS = 3
+# Extra generation attempts allowed for LOCAL providers (Ollama): free
+# and fast to retry, so trading attempts for a first-try success is
+# cheap. The overall deadline still bounds everything; remote providers
+# (per-request paid tier) keep MAX_ATTEMPTS.
+LOCAL_EXTRA_ATTEMPTS = 2
 
 _RETRY_HINT_RE = re.compile(r"retry in ([\d.]+)s")
 
@@ -134,8 +139,14 @@ def generate_json(prompt: str, schema: dict, *, client=None) -> dict:
     last_error = None
     attempt_cap = getattr(client, "attempt_timeout_cap", GEMINI_ATTEMPT_TIMEOUT_CAP_S)
     min_attempt = getattr(client, "min_attempt_timeout", GEMINI_MIN_ATTEMPT_S)
+    # Local providers get LOCAL_EXTRA_ATTEMPTS extra bounded tries: a
+    # failed first response is free to retry there, unlike metered API
+    # providers. The overall deadline still caps everything.
+    max_attempts = MAX_ATTEMPTS
+    if getattr(client, "is_local", False):
+        max_attempts += LOCAL_EXTRA_ATTEMPTS
 
-    for attempt in range(MAX_ATTEMPTS):
+    for attempt in range(max_attempts):
         remaining = deadline - time.monotonic()
         if remaining < min(min_attempt, 0.5 if min_attempt <= 0.5 else min_attempt):
             break  # too little budget left for a server-legal attempt
@@ -285,6 +296,8 @@ class _OllamaClient:
     # CPU inference can legitimately take the whole budget; there is no
     # server-side deadline minimum to respect.
     min_attempt_timeout = 0.5
+    # Retry economics differ from metered APIs: extra attempts are free.
+    is_local = True
 
     def __init__(self, base_url: str, model: str):
         self._base = base_url.rstrip("/")
@@ -339,6 +352,7 @@ class _OllamaClient:
                     f"Local model did not finish in {timeout_s:.0f}s "
                     "(cold start on CPU is slow — raise LLM_BUDGET_SECONDS)"
                 )
+                self.retry_after_s = None
             else:
                 self.last_error = (
                     f"Ollama unreachable ({type(exc).__name__}) — is it running?"
@@ -346,14 +360,22 @@ class _OllamaClient:
             return None
 
         text = envelope.get("response") if isinstance(envelope, dict) else None
-        if not text:
+        if not isinstance(text, str) or not text.strip():
             self.last_error = "ollama returned an empty response"
             return None
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except (json.JSONDecodeError, TypeError):
             self.last_error = "ollama response was not valid JSON"
             return None
+        if not isinstance(parsed, dict):
+            # JSON literal null / array / scalar — parses fine but is not
+            # a usable response object. Without this, last_error kept its
+            # stale value (or None) and generate_json surfaced the
+            # misleading generic 'model returned unparseable output'.
+            self.last_error = "ollama response was not a JSON object"
+            return None
+        return parsed
 
 
 # ---------------------------------------------------------

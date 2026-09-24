@@ -340,3 +340,62 @@ document exists.
 - `get_latest_insight()` tool — ships once Part A is stable in production
 - `trend_slope` in the rollup (needs more history than K=4 to mean anything)
 - Rendering `basis` in the UI — it is a validation artifact, not user-facing
+
+---
+
+## 11. Implementation addendum (v3.1) — local-provider calibration
+
+Part A was developed and hardened against a local Ollama model
+(`LLM_PROVIDER=ollama`, llama3.2 3B) because Gemini free-tier quotas kept
+interrupting development. The guardrails were NOT relaxed for it; the
+following tolerance refinements were added after live failures showed
+where a small model's CORRECT claims get rejected by a naive checker.
+All of them preserve the invariant "a fabricated number matches nothing
+at any depth":
+
+1. **`rollup.*` is a citable basis root.** The doc says "dotted path into
+   the bundle" — the rollup is deterministic precomputed Python output,
+   so `rollup.avg_revenue` etc. resolve like any other subtree. Mixed
+   sales+rollup sentences are still rejected (smallest-subtree rule).
+2. **Common-ancestor citation join.** Multi-path citations
+   ("…current.revenue, …current.orders") resolve to their deepest shared
+   resolving prefix instead of failing.
+3. **Too-narrow-citation repair.** A resolvable citation whose subtree
+   misses numbers used in the text is walked UP to the smallest ancestor
+   that grounds every number. Unresolvable (garbage-tail) citations still
+   fail — only genuinely-cited-but-too-deep paths widen.
+4. **Sign-tolerant magnitude match, direction-gated.** DTOs store SIGNED
+   change percentages; small models write "revenue fell 4.1%" for -4.1.
+   |num|≈|t| passes ONLY when the sentence carries exactly one direction
+   kind (decline/growth vocabulary) and it agrees with the value's sign.
+   "grew 4.1%" against a decline still fails; a bare "4.1%" still requires
+   the signed match.
+5. **Local retry economics.** Extra attempts are free on localhost:
+   Ollama gets 5 transport attempts (vs 3 remote) and 3 validation rounds
+   (vs 2), all inside the same LLM_BUDGET_SECONDS deadline. Set
+   LLM_BUDGET_SECONDS=120 locally — CPU inference of a 3B model takes
+   10–70s per call.
+6. **Prompt pruning (dashboard scale).** A real dashboard bundle measures
+   ~20k chars (~5k tokens): chart series, race-over-time arrays, 10-deep
+   product rankings, K full history windows. Prefilling that on CPU-only
+   local inference exhausted the entire LLM budget before one output
+   token (live-verified: 170s+ timeout; the frontend showed the degrade
+   card with a misleading reason). Fix: `insights._prompt_bundle` sends
+   the model a projection — totals, change_pct, best-lists, employee
+   lanes, top-3 product rows, the rollup — while the checker still
+   validates against the FULL bundle, so grounding never weakens.
+   History reaches the model as rollup statistics, not raw windows.
+   Validation-failure reasons now quote the offending basis/text.
+
+Known limitation (prose quality, not grounding): a 3B model occasionally
+flips a direction word ("fell" for a rise) while the number is verbatim-
+correct. The checker passes it — numbers trace to real data; the verb is
+decoration. Hosted models (Gemini) follow direction instructions far more
+reliably; revisit if it matters after the switch.
+
+Live-verification artifact: `backend/live_ollama_battery.py` (5 scenarios:
+cold start, history rollup, gap-streak-break, full DB pipeline,
+budget-degrade) — run with
+`LLM_PROVIDER=ollama LLM_BUDGET_SECONDS=120 python live_ollama_battery.py`
+from backend/. Switching to Gemini stays an env change only:
+`LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `LLM_MODEL=gemini-2.5-flash`.

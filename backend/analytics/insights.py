@@ -37,10 +37,18 @@ PCT_TOLERANCE = 0.05
 # Tolerance when matching an integer rounding of a bundle value.
 INT_TOLERANCE = 0.5
 
-# Validation rounds: the first response plus one corrective retry when
-# validation fails (mis-cited basis, ungrounded number). Bounded by the
-# same overall deadline as the transport retries in llm.generate_json.
+# Validation rounds (docs: max 3 LLM calls overall). The first response
+# plus one corrective retry when validation fails. LOCAL providers get
+# the doc's full three calls: retries are free, and 3B models converge
+# on a named failure less reliably than hosted models. The overall LLM
+# deadline (LLM_BUDGET_SECONDS) remains the hard bound either way.
 VALIDATION_ATTEMPTS = 2
+LOCAL_VALIDATION_ATTEMPTS = 3
+
+
+def validation_attempts() -> int:
+    """Rounds allowed for the validator loop, by provider."""
+    return LOCAL_VALIDATION_ATTEMPTS if llm.provider() == "ollama" else VALIDATION_ATTEMPTS
 
 
 # ---------------------------------------------------------
@@ -65,8 +73,9 @@ OUTPUT_SCHEMA = {
                     "basis": {"type": "string",
                               "description": "Dotted path into the provided JSON grounding this "
                                              "claim: the SMALLEST subtree that contains EVERY "
-                                             "number used in the text. MUST start with "
-                                             "'current_dto.' (e.g. current_dto.sales)."},
+                                             "number used in the text. Start with 'current_dto.' "
+                                             "(e.g. current_dto.sales) or 'rollup.' for history "
+                                             "statistics (e.g. rollup.avg_revenue)."},
                 },
                 "required": ["text", "basis"],
             },
@@ -92,15 +101,20 @@ FALLBACK_SUMMARY = (
 # only visible next to the context bundle in the user prompt.
 OBSERVATION_RULES = """\
 Rules for each observation:
-1. One section per observation: use ONLY numbers from the single section \
-your `basis` path points at. Never mix sales numbers with employee or \
-product numbers in one observation — make a separate observation instead.
-2. `basis` MUST be EXACTLY ONE dotted path starting with `current_dto.` \
-into the context bundle — never a list, never commas. When a sentence \
-uses several fields, cite their common parent (e.g. `current_dto.sales`, \
-not each field inside it). It must contain EVERY number used in the text.
+1. One topic per observation, from ONE place in the data. Use ONLY numbers \
+from the single subtree your `basis` path points at. Never mix sales \
+numbers with employee, product or history-rollup numbers in one \
+observation — make a separate observation instead.
+2. `basis` is EXACTLY ONE dotted path (no commas, no lists): `current_dto.` \
+followed by the fields you used (e.g. `current_dto.sales`, \
+`current_dto.employees`), or `rollup.` for history statistics \
+(e.g. `rollup.avg_revenue`) when history exists.
 3. Write numbers exactly as they appear in the data (same digits, commas, \
 decimals). Never compute or round new numbers.
+4. Shape of one good observation (X and Y are placeholders — write the \
+real numbers from the data, never X or Y):
+{"text": "Revenue fell X% to $Y.", "basis": "current_dto.sales"}
+If a sentence would mix two subtrees, split it into two observations.
 """
 
 
@@ -306,6 +320,45 @@ def _number_grounded(num: float, targets) -> bool:
     return False
 
 
+def _magnitude_match(num: float, t: float) -> bool:
+    """|num| matches |t| under the same tolerances as _number_grounded."""
+    if abs(abs(num) - abs(t)) <= PCT_TOLERANCE:
+        return True
+    return (abs(num - round(num)) <= 1e-9
+            and abs(abs(num) - math.floor(abs(t) + 0.5)) <= INT_TOLERANCE + 1e-9)
+
+
+# Direction vocabulary for the sign-tolerant match below. The bundle
+# stores SIGNED change percentages (a decline is -4.1); small models
+# habitually write the magnitude with the sign carried by the verb
+# ("revenue fell 4.1%"). The magnitude may stand in for a signed value
+# ONLY when the sentence's direction words agree with the value's sign —
+# so a direction-flip claim ("grew" against a decline) still fails.
+_DECLINE_RE = re.compile(
+    r"\b(fell|drop|dropped|decline[ds]?|down|decrease[ds]?|lost|lower|"
+    r"reduced?|reduction|shrank|weaker)\b"
+)
+_GROWTH_RE = re.compile(
+    r"\b(rose|grew|grown|increase[ds]?|up|climbed|gained|higher|jumped|stronger)\b"
+)
+
+
+def _direction_agrees(text: str, target: float) -> bool:
+    """
+    Gate for magnitude-only matches: exactly one direction kind present,
+    and it matches the target's sign. Both kinds (mixed sentence) or
+    neither (bare number) stay strict — the signed value is required.
+    """
+    lowered = (text or "").lower()
+    declined = bool(_DECLINE_RE.search(lowered))
+    grew = bool(_GROWTH_RE.search(lowered))
+    if declined and not grew:
+        return target < 0
+    if grew and not declined:
+        return target > 0
+    return False
+
+
 def _derivation_allowance(bundle: dict) -> set:
     """
     Whitelisted bundle-wide derived counts (docs §2.4 c) — statements a
@@ -368,6 +421,13 @@ def _check_text(text: str, bundle: dict, basis_path: str) -> bool:
             continue
         if _number_grounded(num, targets):
             continue
+        # Sign-tolerant magnitude match: |num| == |t| AND the sentence's
+        # direction words agree with the target's sign ("fell 4.1%" may
+        # stand in for change_pct -4.1; "grew 4.1%" against a decline is
+        # still rejected as a direction lie).
+        if any(_magnitude_match(num, t) and _direction_agrees(text, t)
+               for t in targets):
+            continue
         return False
     return True
 
@@ -375,6 +435,75 @@ def _check_text(text: str, bundle: dict, basis_path: str) -> bool:
 # ---------------------------------------------------------
 # Prompt assembly
 # ---------------------------------------------------------
+
+def _prompt_bundle(bundle: dict) -> dict:
+    """
+    Prompt-only projection of the context bundle.
+
+    The number checker always validates against the FULL bundle — this
+    projection only decides what the MODEL sees. A real dashboard bundle
+    measures ~20k chars (~5k tokens): per-bucket chart series (24 hourly
+    cells), race-over-time arrays (employees × buckets × 2 metrics),
+    10-deep product rankings, and K full history windows. Prefilling that
+    on CPU-only local inference alone exhausts the whole LLM budget before
+    a single token is generated (live-verified). None of that bulk feeds
+    the commentary — the owner-facing numbers live in the summary objects,
+    change_pct maps, best-lists and the rollup, which are kept whole.
+
+    What is dropped or summarized:
+      - sales.series       -> peak bucket + point count (trend shape is
+                              already captured by current/previous totals)
+      - employees.race_series -> dropped (cumulative arrays per employee)
+      - product rankings   -> top 3 rows per ranking, name+numbers only
+      - recent_window      -> dropped (rollup already summarizes it)
+    """
+    dto = bundle.get("current_dto") or {}
+    view = {"current_dto": {}}
+
+    sales = dto.get("sales")
+    if isinstance(sales, dict):
+        view["current_dto"]["sales"] = {
+            "period": sales.get("period"),
+            "current": sales.get("current"),
+            "previous": sales.get("previous"),
+            "change_pct": sales.get("change_pct"),
+            "best": sales.get("best"),
+            "window": sales.get("window"),
+            "series_points": len(sales.get("series") or []),
+            "peak_series_bucket": max(
+                (sales.get("series") or []),
+                key=lambda c: c.get("revenue", 0) or 0,
+                default=None,
+            ),
+        }
+
+    employees = dto.get("employees")
+    if isinstance(employees, dict):
+        lanes = employees.get("employees") or []
+        view["current_dto"]["employees"] = {
+            "employees": [
+                {k: lane.get(k) for k in
+                 ("name", "is_owner", "orders", "revenue", "profit", "change_pct")
+                 if k in lane}
+                for lane in lanes
+            ],
+        }
+
+    products = dto.get("products")
+    if isinstance(products, dict):
+        prod_view = {}
+        for key in ("top_by_revenue", "top_by_profit", "bottom_by_revenue"):
+            prod_view[key] = [
+                {k: row.get(k) for k in
+                 ("name", "units", "revenue", "profit", "margin_pct", "units_change_pct")
+                 if k in row}
+                for row in (products.get(key) or [])[:3]
+            ]
+        view["current_dto"]["products"] = prod_view
+
+    view["rollup"] = bundle.get("rollup")
+    return view
+
 
 def _prompt(bundle: dict, period: str) -> str:
     return (
@@ -384,14 +513,15 @@ def _prompt(bundle: dict, period: str) -> str:
         f"must be covered by that field's cited basis path — cite the "
         f"SMALLEST subtree that contains ALL the numbers used in that text "
         f"(e.g. current_dto.sales when a sentence mixes revenue and a "
-        f"percentage). Write numbers exactly as they appear in the data.\n"
+        f"percentage; rollup.avg_revenue for the history average). Write "
+        f"numbers exactly as they appear in the data.\n"
         f"{OBSERVATION_RULES}"
         f"Return 1-3 observations and 1-3 areas_to_watch entries.\n\n"
-        f"Context bundle (current_dto = this period's full aggregates for "
-        f"sales, employees and products; recent_window = up to {HISTORY_K} "
-        f"previous same-type windows in chronological order, null = no data "
-        f"for that window; rollup = pre-computed history statistics):\n\n"
-        f"{llm.dumps(bundle)}"
+        f"Context bundle (current_dto = this period's aggregates for sales, "
+        f"employees and products; rollup = pre-computed history statistics, "
+        f"null = no history yet; chart series are summarized — every number "
+        f"you may cite is in this bundle):\n\n"
+        f"{llm.dumps(_prompt_bundle(bundle))}"
     )
 
 
@@ -426,14 +556,15 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
     prompt = _prompt(bundle, period)
     last_reason = "unknown validation failure"
     try:
-        for attempt in range(VALIDATION_ATTEMPTS):
+        attempts = validation_attempts()
+        for attempt in range(attempts):
             output = llm.generate_json(prompt, OUTPUT_SCHEMA, client=llm_client)
             cleaned, reason = _validate_output(output, bundle)
             if cleaned is not None:
                 return cleaned
             last_reason = reason
             print(f"[insights] validation failed: {reason}")
-            if attempt < VALIDATION_ATTEMPTS - 1:
+            if attempt < attempts - 1:
                 # One corrective retry: name the failure, ask for a fix.
                 # Shares the overall LLM deadline via llm.generate_json.
                 prompt = (
@@ -452,25 +583,67 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
     return _degrade(last_reason)
 
 
-def _normalize_basis(bundle: dict, basis: str) -> str | None:
+def _common_ancestor(bundle: dict, token_lists: list) -> str | None:
+    """
+    Deepest shared dotted prefix of the given path token lists that
+    actually resolves in the bundle — the smallest subtree containing
+    every cited path (docs §2.3's "smallest subtree" rule).
+    """
+    common = token_lists[0]
+    for tokens in token_lists[1:]:
+        cut = 0
+        for a, b in zip(common, tokens):
+            if a != b:
+                break
+            cut += 1
+        common = common[:cut]
+    while common:
+        if _resolve_path(bundle, ".".join(common)) is not None:
+            return ".".join(common)
+        common = common[:-1]  # a cited sibling was itself unresolvable — widen
+    return None
+
+
+def _normalize_basis(bundle: dict, basis: str, text: str = "") -> str | None:
     """
     Interpret a model-cited basis path tolerantly; None when nothing
-    sensible resolves. Small local models emit two recurring shapes:
+    sensible resolves. Small local models emit three recurring shapes:
 
       - a missing `current_dto.` root ("employees.change_pct.revenue")
       - several comma-separated leaf paths instead of their common
         parent ("current_dto.current.revenue, current_dto.current.orders")
+      - a TOO-NARROW single path: the sentence cites revenue but also
+        uses the profit / orders / change_pct numbers that live in the
+        same parent object
 
-    For a multi-path citation the smallest common ancestor of the paths
-    that resolve is returned — exactly what the model meant under the
-    "smallest subtree containing every number" rule. Number grounding is
-    enforced against whatever subtree this returns, so normalization can
-    only widen WHICH real-data subtree is eligible, never let a
-    fabricated number through.
+    The first two are accepted as-is (or joined at their common
+    ancestor). For the third, the cited path is WALKED UP to the
+    shallowest RESOLVING ancestor whose subtree grounds every number in
+    the text — exactly what the model meant under the "smallest subtree
+    containing every number" rule, it just cited one leaf of it.
+
+    Strictness elsewhere is deliberate: a citation whose tail does not
+    exist in the bundle still fails, and when no ancestor grounds the
+    numbers the ORIGINAL citation is returned so the checker reports the
+    precise "ungrounded number" failure. Normalization only ever widens
+    WHICH real-data subtree is eligible — a fabricated number matches
+    nothing at ANY depth, so it can never be let through.
     """
     basis = (basis or "").strip().strip("`").strip()
     if _resolve_path(bundle, basis) is not None:
-        return basis
+        if _numbers_in(text):
+            # Too-narrow-citation repair: keep the deepest level while it
+            # grounds the text; otherwise step up to the smallest
+            # resolving ancestor that does. Nothing grounds it -> keep
+            # the original (the checker then rejects the text).
+            tokens = basis.split(".")
+            while tokens:
+                candidate = ".".join(tokens)
+                if _check_text(text, bundle, candidate):
+                    return candidate
+                tokens = tokens[:-1]
+            return basis
+        return basis  # qualitative text — the citation stands as given
 
     # Several paths in one string: keep the resolvable ones, then walk
     # their token lists to the deepest shared prefix.
@@ -481,20 +654,16 @@ def _normalize_basis(bundle: dict, basis: str) -> str | None:
             if part and _resolve_path(bundle, part) is not None:
                 token_lists.append(part.split("."))
         if token_lists:
-            common = token_lists[0]
-            for tokens in token_lists[1:]:
-                cut = 0
-                for a, b in zip(common, tokens):
-                    if a != b:
-                        break
-                    cut += 1
-                common = common[:cut]
-            if common:
-                return ".".join(common)
+            ancestor = _common_ancestor(bundle, token_lists)
+            if ancestor:
+                return ancestor
 
     # Missing root: prepend and accept only if that resolves.
     rooted = f"current_dto.{basis.strip('.')}"
-    return rooted if _resolve_path(bundle, rooted) is not None else None
+    if _resolve_path(bundle, rooted) is not None:
+        return rooted
+
+    return None  # unresolvable citation — degrade per the contract
 
 
 def _validate_output(output, bundle):
@@ -527,20 +696,24 @@ def _validate_output(output, bundle):
         if not isinstance(basis, str) or not basis.strip():
             return None, "empty observation basis"
         # Tolerant citation handling (see _normalize_basis): accepts the
-        # rooted path, a `current_dto.`-prepend, or multi-path lists via
-        # their common ancestor. Ungroundable numbers are still rejected
-        # below — normalization never relaxes number checking.
-        basis = _normalize_basis(bundle, basis)
+        # rooted path, a `current_dto.`-prepend, multi-path lists via
+        # their common ancestor, or a too-narrow leaf widened to the
+        # parent that grounds the text. Ungroundable numbers are still
+        # rejected below — normalization never relaxes number checking.
+        basis = _normalize_basis(bundle, basis, text)
         if basis is None:
-            return None, "observation basis does not resolve"
+            # Quote the citation so logs show WHAT the model invented
+            # (hallucinated field, typo, or a path pruned from the prompt).
+            return None, f"observation basis does not resolve: {obs.get('basis')!r}"
         if not _check_text(text, bundle, basis):
             return None, f"ungrounded number in observation: {text!r}"
         cleaned_obs.append({"text": text.strip(), "basis": basis})
 
     # Summary may reference several sections — checked against the
-    # whole bundle, still real data only.
+    # whole bundle, still real data only. The reason quotes the text so
+    # logs show WHICH number the model fabricated.
     if not _check_text(summary, bundle, "bundle"):
-        return None, "ungrounded number in summary"
+        return None, f"ungrounded number in summary: {summary!r}"
 
     cleaned_watch = []
     for item in watch:
