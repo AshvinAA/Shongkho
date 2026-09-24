@@ -6,6 +6,7 @@ import SalesTrend from '../components/analytics/SalesTrend.jsx'
 import EmployeeRace from '../components/analytics/EmployeeRace.jsx'
 import TopProducts from '../components/analytics/TopProducts.jsx'
 import InsightsCard from '../components/analytics/InsightsCard.jsx'
+import AssistantPanel from '../components/assistant/AssistantPanel.jsx'
 
 const PERIOD_OPTIONS = [
   { value: 'day', label: 'Day' },
@@ -195,6 +196,10 @@ export default function Analytics() {
                 body="AI-generated commentary on this period appears after your first run."
               />
             )}
+          </section>
+
+          <section className="analytics-section">
+            <AssistantPanel />
           </section>
         </>
       )}

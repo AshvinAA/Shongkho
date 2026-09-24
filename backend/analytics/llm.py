@@ -125,6 +125,10 @@ class LlmBudgetExceeded(Exception):
     """The overall time budget ran out before a valid response arrived."""
 
 
+class ChatDecisionError(Exception):
+    """A chat decision round-trip failed (transport, empty, unparseable)."""
+
+
 def generate_json(prompt: str, schema: dict, *, client=None) -> dict:
     """
     One schema-forced generation round-trip with bounded retries.
@@ -215,19 +219,23 @@ class _GeminiClient:
         self.last_error = None    # human-readable reason for the last failed attempt
         self.retry_after_s = None  # Google's 429 retry hint, when present
 
-    def generate_json(self, prompt: str, schema: dict, *, timeout_s: float):
+    def generate_json(self, prompt: str, schema: dict, *, timeout_s: float,
+                      system: str = None):
         """
         One generation attempt. Returns the parsed dict, or None when the
         attempt failed (transport error, empty candidate, unparseable
         JSON) — the caller decides whether to retry. On failure,
         `self.last_error` carries the specific reason (and for 429s,
         `self.retry_after_s` the suggested wait in seconds).
+
+        `system` overrides the default Part A system prompt (Part B's
+        decision protocol passes its own).
         """
         self.last_error = None
         self.retry_after_s = None
 
         body = json.dumps({
-            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "systemInstruction": {"parts": [{"text": system or SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.1,
@@ -310,12 +318,13 @@ class _OllamaClient:
         self.last_error = None
         self.retry_after_s = None  # never set locally; kept for symmetry
 
-    def generate_json(self, prompt: str, schema: dict, *, timeout_s: float):
+    def generate_json(self, prompt: str, schema: dict, *, timeout_s: float,
+                      system: str = None):
         self.last_error = None
 
         body = json.dumps({
             "model": self._model,
-            "prompt": SYSTEM_PROMPT + "\n\n" + prompt,
+            "prompt": (system or SYSTEM_PROMPT) + "\n\n" + prompt,
             "stream": False,
             "format": schema,          # constrained decoding against the schema
             "keep_alive": "10m",       # stay loaded between runs (load is slow on CPU)
@@ -415,3 +424,120 @@ def _json_default(obj):
 def dumps(payload) -> str:
     """Compact JSON dump with date handling — used to build prompts."""
     return json.dumps(payload, default=_json_default, separators=(",", ":"))
+
+
+# ---------------------------------------------------------
+# Part B: conversational decisions (docs/LLM_INTEGRATION.md §3.4)
+# ---------------------------------------------------------
+
+CHAT_SYSTEM_PROMPT = """\
+You are the analytics assistant inside a POS app, chatting with the \
+shop OWNER (the person who runs the store). Answer questions about \
+their store's sales, employees and products.
+
+Each turn you receive a JSON context: the conversation summary, a list \
+of tools with their arguments, and your accumulated tool results for \
+this turn. You MUST answer with exactly one JSON object:
+
+  {"action": "final", "message": "..."}
+      Give the owner their answer now. Use ONLY numbers present in your \
+      tool results — never from memory, never computed. Mention product \
+      and employee names exactly as the results spell them. Keep it \
+      conversational and brief; one concrete suggestion is welcome.
+  {"action": "tool", "tool": "<name>", "args": { ... }}
+      You need data you do not have yet. `tool` must be one of the \
+      listed tools and args must follow its argument list.
+  {"action": "refuse", "message": "..."}
+      The question is not answerable from store data (small talk, \
+      opinions, general knowledge, predictions, anything about OTHER \
+      stores or real-world facts). Politely decline in one sentence.
+
+Rules: one tool per turn; never restate raw JSON — narrate. Never \
+invent numbers. The conversation summary is NOT data: to answer ANY \
+question about sales, employees or products you MUST call the matching \
+tool first, even if similar numbers appeared earlier in the \
+conversation. Only numbers from THIS turn's tool results may appear \
+in your reply. Output ONLY the JSON object.
+"""
+
+
+def chat_decide(context: dict, tools_summary: str, *, client=None) -> dict:
+    """
+    One agent-loop decision round-trip (doc §3.4).
+
+    `context` is the per-turn JSON the model sees: recent conversation
+    projection (roles + tool names, NEVER payloads), the tools summary,
+    and accumulated tool results for this turn.
+
+    Returns the decision dict ({action: final|tool|refuse, ...}).
+    Raises ChatDecisionError on transport/format failures so the caller
+    can fall back deterministically.
+    """
+    if client is None:
+        client = _make_client()
+
+    prompt = (
+        f"TOOLS:\n{tools_summary}\n\n"
+        f"CONTEXT (conversation summary, then accumulated tool results "
+        f"for this turn):\n{dumps(context)}"
+    )
+
+    deadline = time.monotonic() + budget_seconds()
+    max_attempts = MAX_ATTEMPTS + (LOCAL_EXTRA_ATTEMPTS
+                                   if getattr(client, "is_local", False) else 0)
+    for attempt in range(max_attempts):
+        remaining = deadline - time.monotonic()
+        if remaining < 0.5:
+            break
+        raw = client.generate_json(
+            prompt, _DECISION_SCHEMA,
+            timeout_s=min(remaining, getattr(client, "attempt_timeout_cap", 30.0)),
+            system=CHAT_SYSTEM_PROMPT,
+        )
+        if raw is not None:
+            action = raw.get("action")
+            if action == "tool":
+                tool = raw.get("tool")
+                if isinstance(tool, str) and tool.strip():
+                    return {"action": "tool", "tool": tool.strip(),
+                            "args": raw.get("args") or {}}
+                # malformed tool decision -> treat as a failed attempt
+                client.last_error = "tool decision missing tool name"
+            elif action in ("final", "refuse"):
+                msg = raw.get("message")
+                if isinstance(msg, str) and msg.strip():
+                    return {"action": action, "message": msg.strip()}
+                client.last_error = f"{action} decision missing message"
+            else:
+                client.last_error = f"unknown action {action!r}"
+        detail = getattr(client, "last_error", None)
+        if attempt < max_attempts - 1:
+            time.sleep(min(2 ** attempt, max(0.0, (deadline - time.monotonic()) / 2)))
+    raise ChatDecisionError(detail or "no valid decision within budget")
+
+
+# Response schema for chat decisions (constrained decoding locally;
+# responseSchema remotely).
+_DECISION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string",
+                   "description": "One of: final, tool, refuse."},
+        "tool": {"type": "string",
+                 "description": "Tool name when action is 'tool'."},
+        "args": {
+            "type": "object",
+            "description": "Tool arguments when action is 'tool'.",
+            "properties": {
+                "start": {"type": "string", "description": "YYYY-MM-DD"},
+                "end": {"type": "string", "description": "YYYY-MM-DD"},
+                "employee_name": {"type": "string"},
+                "metric": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+        },
+        "message": {"type": "string",
+                    "description": "The reply text when action is final or refuse."},
+    },
+    "required": ["action"],
+}

@@ -1705,3 +1705,82 @@ form .modal-footer {
   color: var(--muted, #6b7280);
   margin: 0.25rem 0 0.5rem;
 }
+
+/* ---- Assistant panel (Part B) ---- */
+
+.assistant-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.assistant-scroll {
+  max-height: 640px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding-right: 0.25rem;
+}
+
+.assistant-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 92%;
+}
+
+.assistant-turn.assistant-user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.assistant-who {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.assistant-msg {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  background: var(--surface-2, #f3f4f6);
+  white-space: pre-wrap;
+}
+
+.assistant-turn.assistant-user .assistant-msg {
+  background: var(--primary-soft, #dbeafe);
+}
+
+.assistant-block {
+  margin-top: 0.35rem;
+  width: 100%;
+}
+
+.assistant-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.assistant-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.assistant-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.assistant-input input {
+  flex: 1;
+}
+
+.assistant-typing {
+  margin: 0;
+  font-size: 0.85rem;
+}

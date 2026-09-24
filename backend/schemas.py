@@ -355,3 +355,27 @@ class AnalyticsDashboardResponse(BaseModel):
     period: str
     generated_at: Optional[datetime] = None
     sections: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------
+# 8. CONVERSATIONAL ANALYTICS (Part B)
+# ---------------------------------------------------------
+class AssistantChatRequest(BaseModel):
+    """Payload for POST /analytics/chat — one user turn."""
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class AssistantUiBlock(BaseModel):
+    """One backend-assembled visual attached to an assistant turn."""
+    type: str                 # sales_chart | employee_leaderboard | product_table | data
+    source_tool: str
+    data: Dict[str, Any]
+
+
+class AssistantChatResponse(BaseModel):
+    """Envelope for POST /analytics/chat (doc §3.5: narration + data are
+    separate channels — the LLM writes message only, the backend assembles
+    ui_blocks from raw tool results)."""
+    message: str
+    ui_blocks: List[AssistantUiBlock] = Field(default_factory=list)
+    tool_calls: List[Dict[str, Any]] = Field(default_factory=list)

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 import deps
 import models
 import schemas
-from analytics import pipeline
+from analytics import assistant, pipeline
 from database import get_db
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -186,3 +186,44 @@ def dashboard(
     return schemas.AnalyticsDashboardResponse(
         period=period, generated_at=generated_at, sections=sections
     )
+
+
+# ---------------------------------------------------------
+# Part B — conversational analytics (docs/LLM_INTEGRATION.md §3)
+# ---------------------------------------------------------
+@router.post("/chat")
+def assistant_chat(
+    payload: schemas.AssistantChatRequest,
+    current_user=Depends(deps.require_owner),
+    db: Session = Depends(get_db),
+):
+    """
+    One conversational-analytics turn (synchronous POST, doc §3.1).
+
+    Returns {message, ui_blocks, tool_calls}. Deterministic error
+    contract: 503 when the assistant is not configured, 429 when the
+    owner's daily cap is spent — never a 500 for LLM/tool failures
+    (those degrade to honest fallback messages inside the envelope).
+    """
+    try:
+        return assistant.handle_message(db, current_user["id"],
+                                        payload.message)
+    except assistant.AssistantUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except assistant.DailyCapReached as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=(f"You've used all {exc.cap} assistant messages for "
+                    "today. The counter resets at midnight UTC."),
+        )
+
+
+@router.get("/chat/history")
+def assistant_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user=Depends(deps.require_owner),
+    db: Session = Depends(get_db),
+):
+    """Reload the conversation (newest last) — the persisted turns."""
+    return {"messages": assistant.chat_history(db, current_user["id"],
+                                                limit=limit)}
