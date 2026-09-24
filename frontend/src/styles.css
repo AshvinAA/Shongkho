@@ -1681,3 +1681,27 @@ form .modal-footer {
     min-width: 140px;
   }
 }
+
+/* ----------------------------------------------------------
+   Insights card (Part A — LLM commentary)
+   ---------------------------------------------------------- */
+.insights-summary {
+  font-size: 1rem;
+  line-height: 1.55;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.insights-list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.insights-watch-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #6b7280);
+  margin: 0.25rem 0 0.5rem;
+}

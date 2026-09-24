@@ -5,6 +5,7 @@ import { SegmentedControl } from '../components/analytics/common.jsx'
 import SalesTrend from '../components/analytics/SalesTrend.jsx'
 import EmployeeRace from '../components/analytics/EmployeeRace.jsx'
 import TopProducts from '../components/analytics/TopProducts.jsx'
+import InsightsCard from '../components/analytics/InsightsCard.jsx'
 
 const PERIOD_OPTIONS = [
   { value: 'day', label: 'Day' },
@@ -22,10 +23,9 @@ const POLL_MS = 1500
  * Owner-only Analytics page (Track A, stage 1).
  *
  * Loads the latest completed snapshots for the selected period, shows
- * the three graph sections, and offers a "Run analysis" button that
- * starts a run and polls its status (409 = one is already running —
- * just keep polling it). No LLM yet: the insights card shows the
- * stage-2 placeholder written by the pipeline.
+ * the four sections (sales, employees, products, LLM insights), and
+ * offers a "Run analysis" button that starts a run and polls its status
+ * (409 = one is already running — just keep polling it).
  */
 export default function Analytics() {
   const { user } = useAuth()
@@ -112,7 +112,7 @@ export default function Analytics() {
   }
 
   const running = run && (run.status === 'QUEUED' || run.status === 'RUNNING')
-  const empty = !loading && !sections.sales && !sections.employees && !sections.products
+  const empty = !loading && !sections.sales && !sections.employees && !sections.products && !sections.insights
 
   return (
     <div className="page analytics-page">
@@ -187,12 +187,13 @@ export default function Analytics() {
           </section>
 
           <section className="analytics-section">
-            {sections.insights && !sections.insights.pending ? (
-              <p className="card">{sections.insights.summary}</p>
+            {sections.insights ? (
+              <InsightsCard data={sections.insights} />
             ) : (
-              <p className="muted">
-                {sections.insights?.pending || 'Business insights arrive with stage 2 (LLM).'}
-              </p>
+              <EmptySection
+                title="Business insights"
+                body="AI-generated commentary on this period appears after your first run."
+              />
             )}
           </section>
         </>

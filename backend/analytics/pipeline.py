@@ -6,9 +6,10 @@ Flow (mirrors the architecture doc):
     -> owner has a QUEUED/RUNNING row?            -> 409
     -> insert AnalysisRun(QUEUED)                  -> enqueue Celery chord
     -> three aggregations fan out in parallel
-    -> fan-in callback:
-         assemble DTO -> (LLM later) -> write all 4 snapshot rows
-         in ONE transaction -> mark run COMPLETED
+    -> executor (sync inline / Celery chord):
+         aggregate DTO -> LLM insights (outside any tx, degrades on
+         failure) -> write all 4 snapshot rows in ONE transaction
+         -> mark run COMPLETED
     -> any failure: link_error marks the run FAILED (releases the lock)
 
 SQLite has no true row locks, so the lock is enforced as "no row in
@@ -21,7 +22,7 @@ import threading
 from datetime import date, datetime, timedelta
 
 import models
-from analytics import aggregators, timeutils
+from analytics import aggregators, insights, timeutils
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -147,9 +148,38 @@ def _execute_run(db: Session, run, period: str) -> None:
     )
     products_payload = aggregators.aggregate_products(sales, product_names, period, today)
 
+    # ---- Part A: LLM insight engine (docs/LLM_INTEGRATION.md §2) ----
+    # History fetch happens BEFORE the network call and the snapshot tx:
+    # completed sales-section snapshots for this owner + period_type,
+    # newest first. Calendar mapping (dedupe, gap-as-null, rollup) lives
+    # in insights.build_context.
+    history = [
+        row.data for row in db.query(models.AnalyticsSnapshot.data)
+        .join(models.AnalysisRun, models.AnalysisRun.id == models.AnalyticsSnapshot.run_id)
+        .filter(
+            models.AnalyticsSnapshot.owner_id == run.owner_id,
+            models.AnalyticsSnapshot.section == "sales",
+            models.AnalyticsSnapshot.period_type == period,
+            models.AnalysisRun.status == "COMPLETED",
+        )
+        .order_by(models.AnalyticsSnapshot.id.desc())
+        .limit(insights.HISTORY_K * 4)  # headroom for same-window duplicates
+        .all()
+    ]
+    bundle = insights.build_context(
+        sales_payload, history,
+        employees_payload=employees_payload,
+        products_payload=products_payload,
+    )
+    # The LLM call happens HERE — after aggregations, BEFORE the snapshot
+    # transaction. No DB transaction ever spans the network call; any
+    # failure degrades to a flagged fallback and the run still completes.
+    insights_payload = insights.build_insights(bundle, period)
+
     # ---- snapshot writes: all sections in ONE transaction ----
-    # Section 4 (insights) is stage 2; stage 1 writes a placeholder so
-    # the dashboard's four-section contract is stable from day one.
+    # All four payloads are fully computed above; the single tx publishes
+    # them atomically. (Stage-1 placeholder removed: the LLM now supplies
+    # real insights, or a degraded marker when it could not run.)
     now = datetime.utcnow()
     rows = [
         models.AnalyticsSnapshot(
@@ -170,8 +200,7 @@ def _execute_run(db: Session, run, period: str) -> None:
         models.AnalyticsSnapshot(
             run_id=run.id, owner_id=run.owner_id,
             section="insights", period_type=period,
-            data={"summary": None, "pending": "Insights arrive with stage 2 (LLM)"},
-            generated_at=now,
+            data=insights_payload, generated_at=now,
         ),
     ]
     db.add_all(rows)
