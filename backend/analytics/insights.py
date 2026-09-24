@@ -65,8 +65,8 @@ OUTPUT_SCHEMA = {
                     "basis": {"type": "string",
                               "description": "Dotted path into the provided JSON grounding this "
                                              "claim: the SMALLEST subtree that contains EVERY "
-                                             "number used in the text (e.g. current_dto.sales when "
-                                             "one sentence mixes revenue and a percentage)."},
+                                             "number used in the text. MUST start with "
+                                             "'current_dto.' (e.g. current_dto.sales)."},
                 },
                 "required": ["text", "basis"],
             },
@@ -84,6 +84,24 @@ FALLBACK_SUMMARY = (
     "Automated insights are unavailable for this run, but your sales, "
     "employee, and product data below are up to date."
 )
+
+# Small local models (llama3.2-class) follow ONE simple rule better than a
+# combined paragraph. Each observation gets its own focused instruction —
+# notably: never merge numbers from different sections into one sentence.
+# Kept here (not in llm.SYSTEM_PROMPT) because the paths it references are
+# only visible next to the context bundle in the user prompt.
+OBSERVATION_RULES = """\
+Rules for each observation:
+1. One section per observation: use ONLY numbers from the single section \
+your `basis` path points at. Never mix sales numbers with employee or \
+product numbers in one observation — make a separate observation instead.
+2. `basis` MUST be EXACTLY ONE dotted path starting with `current_dto.` \
+into the context bundle — never a list, never commas. When a sentence \
+uses several fields, cite their common parent (e.g. `current_dto.sales`, \
+not each field inside it). It must contain EVERY number used in the text.
+3. Write numbers exactly as they appear in the data (same digits, commas, \
+decimals). Never compute or round new numbers.
+"""
 
 
 # ---------------------------------------------------------
@@ -367,6 +385,7 @@ def _prompt(bundle: dict, period: str) -> str:
         f"SMALLEST subtree that contains ALL the numbers used in that text "
         f"(e.g. current_dto.sales when a sentence mixes revenue and a "
         f"percentage). Write numbers exactly as they appear in the data.\n"
+        f"{OBSERVATION_RULES}"
         f"Return 1-3 observations and 1-3 areas_to_watch entries.\n\n"
         f"Context bundle (current_dto = this period's full aggregates for "
         f"sales, employees and products; recent_window = up to {HISTORY_K} "
@@ -433,6 +452,51 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
     return _degrade(last_reason)
 
 
+def _normalize_basis(bundle: dict, basis: str) -> str | None:
+    """
+    Interpret a model-cited basis path tolerantly; None when nothing
+    sensible resolves. Small local models emit two recurring shapes:
+
+      - a missing `current_dto.` root ("employees.change_pct.revenue")
+      - several comma-separated leaf paths instead of their common
+        parent ("current_dto.current.revenue, current_dto.current.orders")
+
+    For a multi-path citation the smallest common ancestor of the paths
+    that resolve is returned — exactly what the model meant under the
+    "smallest subtree containing every number" rule. Number grounding is
+    enforced against whatever subtree this returns, so normalization can
+    only widen WHICH real-data subtree is eligible, never let a
+    fabricated number through.
+    """
+    basis = (basis or "").strip().strip("`").strip()
+    if _resolve_path(bundle, basis) is not None:
+        return basis
+
+    # Several paths in one string: keep the resolvable ones, then walk
+    # their token lists to the deepest shared prefix.
+    if "," in basis or " and " in basis:
+        token_lists = []
+        for part in basis.replace(" and ", ",").split(","):
+            part = part.strip().strip("`").strip(".")
+            if part and _resolve_path(bundle, part) is not None:
+                token_lists.append(part.split("."))
+        if token_lists:
+            common = token_lists[0]
+            for tokens in token_lists[1:]:
+                cut = 0
+                for a, b in zip(common, tokens):
+                    if a != b:
+                        break
+                    cut += 1
+                common = common[:cut]
+            if common:
+                return ".".join(common)
+
+    # Missing root: prepend and accept only if that resolves.
+    rooted = f"current_dto.{basis.strip('.')}"
+    return rooted if _resolve_path(bundle, rooted) is not None else None
+
+
 def _validate_output(output, bundle):
     """
     Enforce the response contract beyond the JSON schema: shape,
@@ -460,8 +524,15 @@ def _validate_output(output, bundle):
         text, basis = obs.get("text"), obs.get("basis")
         if not isinstance(text, str) or not text.strip():
             return None, "empty observation text"
-        if not isinstance(basis, str) or _resolve_path(bundle, basis) is None:
-            return None, f"observation basis does not resolve: {basis!r}"
+        if not isinstance(basis, str) or not basis.strip():
+            return None, "empty observation basis"
+        # Tolerant citation handling (see _normalize_basis): accepts the
+        # rooted path, a `current_dto.`-prepend, or multi-path lists via
+        # their common ancestor. Ungroundable numbers are still rejected
+        # below — normalization never relaxes number checking.
+        basis = _normalize_basis(bundle, basis)
+        if basis is None:
+            return None, "observation basis does not resolve"
         if not _check_text(text, bundle, basis):
             return None, f"ungrounded number in observation: {text!r}"
         cleaned_obs.append({"text": text.strip(), "basis": basis})
