@@ -366,7 +366,8 @@ def _prompt(bundle: dict, period: str) -> str:
         f"must be covered by that field's cited basis path — cite the "
         f"SMALLEST subtree that contains ALL the numbers used in that text "
         f"(e.g. current_dto.sales when a sentence mixes revenue and a "
-        f"percentage). Write numbers exactly as they appear in the data.\n\n"
+        f"percentage). Write numbers exactly as they appear in the data.\n"
+        f"Return 1-3 observations and 1-3 areas_to_watch entries.\n\n"
         f"Context bundle (current_dto = this period's full aggregates for "
         f"sales, employees and products; recent_window = up to {HISTORY_K} "
         f"previous same-type windows in chronological order, null = no data "
@@ -396,8 +397,10 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
         print(f"[insights] degraded: {reason}")
         return {"summary": None, "degraded": True, "degraded_reason": reason}
 
-    if llm.api_key() == "" and llm_client is None:
-        return _degrade("GEMINI_API_KEY not configured")
+    if not llm.is_configured() and llm_client is None:
+        return _degrade(
+            "LLM not configured (set GEMINI_API_KEY or LLM_PROVIDER=ollama)"
+        )
     if not bundle.get("current_dto", {}).get("sales"):
         return _degrade("no current data to interpret")
 

@@ -26,6 +26,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import database  # noqa: E402
 from main import app  # noqa: E402
 
+# --- LLM env isolation -------------------------------------------------
+# database.py load_dotenv()s backend/.env for the WHOLE test process.
+# That would leak LLM_PROVIDER / GEMINI_API_KEY / LLM_MODEL into tests
+# (some tests would hit the real local Ollama). Tests must be hermetic:
+# scrub the LLM namespace; individual tests monkeypatch what they need.
+for _var in list(os.environ):
+    if _var in ("LLM_PROVIDER", "LLM_MODEL", "GEMINI_API_KEY",
+                "LLM_BUDGET_SECONDS", "OLLAMA_URL"):
+        del os.environ[_var]
+
 
 @pytest.fixture()
 def db_engine(tmp_path):

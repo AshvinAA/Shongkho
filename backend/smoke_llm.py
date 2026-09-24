@@ -14,8 +14,8 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 from analytics import insights, llm  # noqa: E402
 
-print("key set:", bool(llm.api_key()), "| model:", llm.model_name(),
-      "| budget:", llm.budget_seconds(), "s")
+print("provider:", llm.provider(), "| model:", llm.model_name(),
+      "| configured:", llm.is_configured(), "| budget:", llm.budget_seconds(), "s")
 
 # Synthetic but realistic bundle — exact payload shapes the pipeline produces.
 sales = {
