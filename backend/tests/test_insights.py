@@ -240,6 +240,69 @@ class TestNumberChecker:
         assert insights._check_text("Top list covers 2 products", bundle,
                                     "current_dto.products.top_by_revenue")
 
+    # ---- sign-tolerant magnitude match (live-found llama behavior) ----
+
+    def test_magnitude_with_direction_word_passes(self):
+        """'fell 4.1%' may stand in for change_pct -4.1: the verb carries the sign."""
+        bundle = {"current_dto": {"sales": {"change_pct": {"revenue": -4.1}}}}
+        assert insights._check_text("Revenue fell 4.1%", bundle,
+                                    "current_dto.sales.change_pct.revenue")
+        assert insights._check_text("Revenue dropped about 4%", bundle,
+                                    "current_dto.sales.change_pct.revenue")
+
+    def test_magnitude_direction_flip_fails(self):
+        """'grew 4.1%' against a -4.1 decline is a direction lie — rejected."""
+        bundle = {"current_dto": {"sales": {"change_pct": {"revenue": -4.1}}}}
+        assert not insights._check_text("Revenue grew 4.1%", bundle,
+                                        "current_dto.sales.change_pct.revenue")
+
+    def test_bare_magnitude_stays_strict(self):
+        """No direction words -> the signed value is required."""
+        bundle = {"current_dto": {"sales": {"change_pct": {"revenue": -4.1}}}}
+        assert not insights._check_text("Revenue changed by 4.1%", bundle,
+                                        "current_dto.sales.change_pct.revenue")
+
+    def test_magnitude_wrong_value_fails(self):
+        bundle = {"current_dto": {"sales": {"change_pct": {"revenue": -4.1}}}}
+        assert not insights._check_text("Revenue fell 9.7%", bundle,
+                                        "current_dto.sales.change_pct.revenue")
+
+    # ---- rollup citations (history statistics are valid basis roots) ----
+
+    def test_rollup_leaf_basis_resolves(self):
+        bundle = {"current_dto": {"sales": {}},
+                  "rollup": {"avg_revenue": 15400.0,
+                             "consecutive_declining_periods": 4}}
+        assert insights._check_text("Average revenue was 15400.", bundle,
+                                    "rollup.avg_revenue")
+        assert insights._check_text("Four consecutive declining periods.", bundle,
+                                    "rollup")
+
+    def test_rollup_citation_rejects_unrelated_numbers(self):
+        bundle = {"current_dto": {"sales": {}},
+                  "rollup": {"avg_revenue": 15400.0}}
+        assert not insights._check_text("Average revenue was 15400, up 12.5%", bundle,
+                                        "rollup.avg_revenue")
+
+    # ---- too-narrow citation repair (live-found llama behavior) ----
+
+    def test_too_narrow_basis_widens_to_grounding_parent(self):
+        """Sentence uses revenue+profit+orders; citation names only revenue
+        -> normalizes to the parent that grounds every number."""
+        bundle = {"current_dto": {"sales": {"current": {
+            "revenue": 14200.0, "profit": 4200.0, "orders": 87}}}}
+        text = "Revenue was $14,200 with a profit of $4,200 and 87 orders."
+        basis = insights._normalize_basis(
+            bundle, "current_dto.sales.current.revenue", text)
+        assert basis == "current_dto.sales.current"
+        assert insights._check_text(text, bundle, basis)
+
+    def test_garbage_basis_still_fails(self):
+        """A citation whose tail does not exist must NOT silently widen."""
+        bundle = {"current_dto": {"sales": {"current": {"revenue": 100.0}}}}
+        assert insights._normalize_basis(
+            bundle, "current_dto.sales.nonexistent", "Revenue was 100.") is None
+
 
 # ---------------------------------------------------------
 # build_insights — full contract
