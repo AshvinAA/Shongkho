@@ -109,10 +109,13 @@ Rules for each observation:
 from the single subtree your `basis` path points at. Never mix sales \
 numbers with employee, product or history-rollup numbers in one \
 observation — make a separate observation instead.
-2. `basis` is EXACTLY ONE dotted path (no commas, no lists): `current_dto.` \
-followed by the fields you used (e.g. `current_dto.sales`, \
-`current_dto.employees`), or `rollup.` for history statistics \
-(e.g. `rollup.avg_revenue`) when history exists.
+2. `basis` is EXACTLY ONE dotted path (no commas, no lists, NO [0] \
+indexes): `current_dto.` followed by the fields you used (e.g. \
+`current_dto.sales`, `current_dto.employees`) — NEVER \
+`current_dto.employees[0]` or `current_dto.employees.0`; cite the \
+section (`current_dto.employees`) when the sentence covers any \
+employee — or `rollup.` for history statistics (e.g. \
+`rollup.avg_revenue`) when history exists.
 3. Write numbers exactly as they appear in the data (same digits, commas, \
 decimals). Never compute or round new numbers.
 4. Voice (placeholders X and Y — write the REAL numbers from the data, \
@@ -586,7 +589,10 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
                     f"Return the full corrected JSON. Every number in "
                     f"summary/observation text must be covered by that "
                     f"field's cited basis path (the smallest subtree "
-                    f"containing all its numbers). If a change percentage "
+                    f"containing all its numbers). Cite the SECTION as a \
+plain dotted path — never an indexed element: `current_dto.employees` \
+for anything about one or more employees, `current_dto.products` for \
+products. If a change percentage "
                     f"in the data is NEGATIVE, sales DECLINED: write the "
                     f"minus sign or a word like 'fell'/'dropped' — never "
                     f"say 'up'/'grew' for a negative value, and never "
@@ -599,6 +605,33 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
     except Exception as exc:  # noqa: BLE001 - the LLM step NEVER fails the run
         return _degrade(f"unexpected {type(exc).__name__}: {exc}")
     return _degrade(last_reason)
+
+
+def _repair_nested_index(bundle: dict, basis: str) -> str | None:
+    """
+    One-shot fix for section/index shorthand citations (llama3.2):
+    'current_dto.employees.0.revenue' means 'current_dto.employees.
+    employees.0.revenue' in the real bundle shape {employees: {employees:
+    [...]}}. When an index token does NOT resolve where the path stands
+    but the parent resolved to a SECTION DICT, duplicate the previous
+    token (the section name) so the index reaches the nested list. Every
+    insertion is verified by resolving the final path — notation repair
+    only; it can never make a fabricated number groundable.
+    """
+    tokens = basis.split(".")
+    if not any(t.isdigit() for t in tokens):
+        return None  # nothing index-shaped to repair
+    out = []
+    for tok in tokens:
+        if out:
+            node = _resolve_path(bundle, ".".join(out))
+            if (node is not None and isinstance(node, dict) and tok.isdigit()
+                    and _resolve_path(bundle, ".".join(out + [tok])) is None
+                    and out[-1] != tok):
+                out.append(out[-1])   # employees.0 -> employees.employees.0
+        out.append(tok)
+    repaired = ".".join(out)
+    return repaired if _resolve_path(bundle, repaired) is not None else None
 
 
 def _common_ancestor(bundle: dict, token_lists: list) -> str | None:
@@ -652,6 +685,14 @@ def _normalize_basis(bundle: dict, basis: str, text: str = "") -> str | None:
     # ("…top_by_revenue[0].revenue"). Convert to our dotted form; this
     # only changes NOTATION — the path still has to exist in the bundle.
     basis = re.sub(r"\[(\d+)\]", r".\1", basis)
+    # Nested-section repair: llama cites 'current_dto.employees[0]'
+    # when the bundle stores {employees: {employees: [...]}} — the
+    # bracket converts to 'employees.0' but the SECTION name must be
+    # repeated for the path to resolve. Insert it (verified against the
+    # bundle, index in range) so the observation is judged on its
+    # numbers, not discarded over citation shorthand.
+    if _resolve_path(bundle, basis) is None:
+        basis = _repair_nested_index(bundle, basis) or basis
     if _resolve_path(bundle, basis) is not None:
         if _numbers_in(text):
             # Too-narrow-citation repair: keep the deepest level while it

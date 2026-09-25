@@ -45,6 +45,12 @@ class RunValidationError(Exception):
 # ---------------------------------------------------------
 # START A RUN
 # ---------------------------------------------------------
+# A run stuck in QUEUED/RUNNING older than this is considered dead
+# (crashed worker, server killed mid-run) — reaped lazily at conflict
+# time so the owner can start a new run without manual DB surgery.
+STALE_RUN_TIMEOUT_MIN = 10
+
+
 def start_run(db: Session, owner_id: int, period: str, enqueue=None) -> str:
     """
     Create a QUEUED run (the lock) and enqueue the Celery chord.
@@ -63,7 +69,20 @@ def start_run(db: Session, owner_id: int, period: str, enqueue=None) -> str:
             models.AnalysisRun.owner_id == owner_id,
             models.AnalysisRun.status.in_(("QUEUED", "RUNNING")),
         ).first()
-        if active:
+        if active and active.started_at and active.started_at < (
+                datetime.utcnow() - timedelta(minutes=STALE_RUN_TIMEOUT_MIN)):
+            # Dead lock from a crashed/killed server (observed: the old
+            # uvicorn process finished runs against the OLD schema and
+            # left rows RUNNING forever). Reap it and let the click
+            # through — a genuinely still-running worker would be
+            # re-marked FAILED by the worker's own error path anyway.
+            print(f"[pipeline] reaping stale {active.status} run "
+                  f"{active.id} (older than {STALE_RUN_TIMEOUT_MIN} min)")
+            active.status = "FAILED"
+            active.completed_at = datetime.utcnow()
+            active.failure_reason = "Stale run reaped (server restarted mid-run?)"
+            db.commit()
+        elif active:
             raise RunConflictError(
                 f"An analysis run is already {active.status} for this store."
             )
