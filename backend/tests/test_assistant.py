@@ -366,6 +366,75 @@ class TestAgentLoop:
         assert out["meta"]["fallback_reason"] == "synthesized"
         assert out["meta"]["shipped_grounded"] is True
 
+    def test_vague_employee_answer_specificity_retry(self, db_session,
+                                                     configured,
+                                                     monkeypatch):
+        """Number-free hedge that names nobody (live failure: a lay-off
+        question answered with 'the trailing seller') passes the reality
+        and relevance gates but fails the SPECIFICITY gate — one named
+        corrective, then the committed answer ships."""
+        _seed_store(db_session)
+        today = date.today().isoformat()
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_employee_performance",
+             "args": {"start": today, "end": today}},
+            {"action": "final",
+             "message": "The trailing seller shows a significant gap — "
+                        "watch the trend before acting."},
+            {"action": "final",
+             "message": "Karim trails today — coach, don't cut."},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(
+            db_session, 1, "Should I lay off my weakest seller?")
+        assert out["message"] == "Karim trails today — coach, don't cut."
+        assert out["meta"]["narration_retried"] is True
+        assert out["meta"]["specificity_retried"] is True
+        assert out["meta"]["grounded_first_pass"] is False
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_vague_answer_double_fail_synthesizes(self, db_session, configured,
+                                                  monkeypatch):
+        """Two vague replies on a classified employee question: the
+        second earns no retry (same cap economics as a narration
+        double-fail) and the deterministic ranking template ships."""
+        _seed_store(db_session)
+        today = date.today().isoformat()
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_employee_performance",
+             "args": {"start": today, "end": today}},
+            {"action": "final",
+             "message": "The gap is significant — watch it before it "
+                        "becomes a trend."},
+            {"action": "final",
+             "message": "Someone is trailing the team — coach them."},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(
+            db_session, 1, "Who is the worst performing employee?")
+        # Seeded today: Rahim 300/90 leads, Karim 200/60 trails.
+        assert "Rahim leads your staff with 300.0 in revenue" in out["message"]
+        assert out["meta"]["fallback_reason"] == "synthesized"
+        assert out["meta"]["specificity_retried"] is True
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_domain_classifier_intent_phrasings(self, db_session):
+        """Advice-intent phrasings carry no explicit employee noun —
+        the intent word IS the signal (live gap Claude-flagged)."""
+        _seed_store(db_session)
+        db_session.commit()
+        assert assistant._question_domain(
+            db_session, 1, "Should I lay off my weakest seller?") == "employee"
+        assert assistant._question_domain(
+            db_session, 1, "Anyone struggling this week?") == "employee"
+        assert assistant._question_domain(
+            db_session, 1, "Should we let someone go?") == "employee"
+        assert assistant._question_domain(
+            db_session, 1, "Is the team doing okay?") == "employee"
+        # Product override still wins over employee hints.
+        assert assistant._question_domain(
+            db_session, 1, "Which product is our bestseller?") == "product"
+
     def test_narration_self_correction_recovers(self, db_session, configured,
                                                 monkeypatch):
         """Bad narration (no tool called) -> error observation -> the model

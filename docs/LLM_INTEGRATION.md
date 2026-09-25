@@ -514,6 +514,43 @@ at any depth":
    the whole rescue ladder (auto-fetch, refuse-retry, synthesis)
    exists to compensate for 3B tool-discipline, and Gemini makes
    most of it redundant while keeping it as a safety net.
+14. **Part B specificity gate (the vague-answer loophole).** External
+   review (Claude) flagged a real hole, verified against the code: the
+   reality gate only checks numbers-if-present, and the relevance gate
+   explicitly passes number-free prose — so a lay-off question answered
+   with entity-free hedging ("the trailing seller", "the gap is
+   significant") shipped clean: nothing FALSE in it, and nothing in it
+   either. Fix is a THIRD, narrower narration gate, not a widening of
+   the existing two:
+   - `_narration_specific(message, domain, accumulated)`: on a
+     classified employee/product question whose right-domain tool
+     returned rows, the final message must NAME at least one entity
+     from the payload (whole-word match — substring tests let "Ali"
+     ride inside "quality"). Empty payload waives it; unclassified
+     questions are exempt.
+   - In-loop: a clean-but-vague final earns ONE corrective retry
+     ("commit to specifics — name the actual people or products")
+     with telemetry `specificity_retried`; the double-fail then falls
+     through the same post-loop gate, so `_synth_answer`'s named
+     ranking template now fires exactly where the vague answer used to
+     ship. `_gates_pass` = reality ∧ relevance ∧ specificity is the
+     single post-loop + shipped_grounded definition.
+   - `_question_domain` widened with advice-INTENT phrasings (lay off,
+     let go, struggling, weak/weakst, "should I/we keep") so pointed
+     advice questions classify as employee even without an explicit
+     employee noun; product override still wins.
+   - Ollama `num_predict` 700 → 1100 (live: long advice answers cut
+     mid-sentence — "…the best-selling product, the"), and the prompt
+     gains a rule: employee/product answers must NAME entities from
+     tool_results, never "the trailing seller".
+   Review's rejected suggestions, for the record: pre-emptive fetching
+   before the model decides (the refuse-rescue + auto-fetch already
+   cover misfires without changing loop economics) and a free-text
+   topical-relevance check on number-free advice (unverifiable without
+   an LLM judge; named-entity requirement is the deterministic
+   approximation). Vague-answer risk remains on unclassified (domain
+   None) questions by design — gating every conversational reply for
+   named entities would turn the advisor back into a refuse-bot.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-

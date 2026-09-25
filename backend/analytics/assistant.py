@@ -99,7 +99,12 @@ _DOMAIN_HINTS = {
     "employee": re.compile(
         r"\b(employee|employees|staff|worker|workers|team|seller|sellers|"
         r"performing|performer|performers|firing|fire|who is|who was|who's|"
-        r"which employee)\b", re.I),
+        r"which employee|"
+        # Advice-intent phrasings (live gap: "Should I lay off my weakest
+        # seller?" / "Should I let someone go?" carry no explicit
+        # employee noun — the intent word IS the signal).
+        r"lay.?off|let\s+(?:\w+\s+){0,2}go|letting\s+go|struggling|weak|"
+        r"weakest|should\s+(?:i|we)\s+keep)\b", re.I),
     "product": re.compile(
         r"\b(product|products|item|items|stock|inventory|sku|best.?seller|"
         r"bestselling|most sold|push)\b", re.I),
@@ -325,8 +330,57 @@ def _narration_relevant(message: str, tool_results: list,
     if have & wanted:
         return True
     # Wrong-domain numbers present: allow only if the message contains
-    # NO numbers at all (pure qualitative advice).
+    # NO numbers at all (pure qualitative advice — which the
+    # specificity gate below still checks for named entities).
     return not insights._numbers_in(message)  # noqa: SLF001
+
+
+def _mentions_any(message: str, names: list) -> bool:
+    """Whole-word containment (a plain substring test would let a name
+    like 'Ali' ride inside 'quality')."""
+    text = message or ""
+    for name in names:
+        if len(name or "") >= 2 and re.search(
+                rf"\b{re.escape(name)}\b", text, re.I):
+            return True
+    return False
+
+
+def _narration_specific(message: str, domain: str | None,
+                        accumulated: list) -> bool:
+    """
+    SPECIFICITY gate — the third narration gate. Live-found failure: a
+    lay-off question answered with number-free, entity-free hedging
+    ("the trailing seller", "the gap is significant") sailed through
+    the reality and relevance gates because there was nothing FALSE in
+    it — there was just nothing in it. On a classified data question,
+    a grounded answer must NAME at least one entity from the right
+    tool's payload (an empty payload waives the requirement — nothing
+    to name; unclassified questions are exempt).
+    """
+    if domain not in ("employee", "product"):
+        return True
+    wanted_tool = ("get_employee_performance" if domain == "employee"
+                   else "get_top_products")
+    res = next((r for r in reversed(accumulated)
+                if isinstance(r, dict) and r.get("tool") == wanted_tool),
+               None)
+    key = "employees" if domain == "employee" else "products"
+    entities = ((res or {}).get("data") or {}).get(key) or []
+    names = [e.get("name") for e in entities
+             if isinstance(e, dict) and e.get("name")]
+    if not names:
+        return True
+    return _mentions_any(message, names)
+
+
+def _gates_pass(message: str, accumulated: list,
+                domain: str | None) -> bool:
+    """All three narration gates together — used by the post-loop gate
+    and the shipped_grounded invariant."""
+    return (_narration_grounded(message, accumulated)
+            and _narration_relevant(message, accumulated, domain)
+            and _narration_specific(message, domain, accumulated))
 
 
 # ---------------------------------------------------------
@@ -408,6 +462,7 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     telemetry = {
         "rounds_used": 0,
         "narration_retried": False,
+        "specificity_retried": False,  # vague-answer corrective fired
         "grounded_first_pass": None,   # first final: checker verdict
         "refused": False,
         "tool_calls_ok": 0,
@@ -515,9 +570,12 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
 
         if action == "final":
             reply = decision.get("message")
-            grounded = (_narration_grounded(reply or "", accumulated)
-                        and _narration_relevant(reply or "", accumulated,
-                                                domain))
+            grounded_r = _narration_grounded(reply or "", accumulated)
+            relevant_r = _narration_relevant(reply or "", accumulated,
+                                             domain)
+            specific_r = _narration_specific(reply or "", domain,
+                                             accumulated)
+            grounded = grounded_r and relevant_r and specific_r
             if telemetry["grounded_first_pass"] is None:
                 telemetry["grounded_first_pass"] = grounded
             if grounded:
@@ -552,42 +610,66 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                 break
             narration_retried = True
             telemetry["narration_retried"] = True
-            print("[assistant] narration failed the number check — "
-                  "asking the model to fetch data first")
-            # The corrective message must match the failure shape: with
-            # data in hand the fix is "quote verbatim" ("call the tool
-            # first" makes the model drop ALL numbers instead); with no
-            # data the fix is to actually fetch.
-            if accumulated:
+            # The corrective message must match the failure shape:
+            # fabricated/unbacked numbers, wrong-domain numbers, or a
+            # vague answer that names nobody from the data.
+            if not grounded_r:
+                print("[assistant] narration failed the number check — "
+                      "asking the model to fetch data first")
+                # With data in hand the fix is "quote verbatim" ("call
+                # the tool first" makes the model drop ALL numbers
+                # instead); with no data the fix is to actually fetch.
+                if accumulated:
+                    observations.append({
+                        "error": ("Your reply contained numbers that do not "
+                                  "appear in tool_results (computed or "
+                                  "invented). Rewrite it: quote ONLY numbers "
+                                  "that appear verbatim in tool_results — "
+                                  "never a difference, total or percentage "
+                                  "you calculated yourself.")})
+                elif not insights._numbers_in(reply or ""):
+                    # Number-free reply still failed the gate: a greeting,
+                    # capabilities question or misfired refusal whose text
+                    # tripped the checker (e.g. digits in "top 3"). Telling
+                    # it to "call a tool" here caused a fallback spiral —
+                    # the correct fix is a plain-words rewrite.
+                    observations.append({
+                        "error": ("Your reply looked like data talk but you "
+                                  "fetched no data. This question needs no "
+                                  "tool: reply in plain conversational words "
+                                  "with NO digits at all — spell any count "
+                                  "out (\"three\", not \"3\").")
+                    })
+                    reply = None
+                    continue
+                else:
+                    observations.append({
+                        "error": ("Your reply contained numbers but you "
+                                  "called no tool this turn. Call the right "
+                                  "tool first, then answer using ONLY numbers "
+                                  "from its result.")
+                    })
+            elif not relevant_r:
+                print("[assistant] wrong-domain numbers — asking the "
+                      "model to answer from the question's own data")
                 observations.append({
-                    "error": ("Your reply contained numbers that do not "
-                              "appear in tool_results (computed or "
-                              "invented). Rewrite it: quote ONLY numbers "
-                              "that appear verbatim in tool_results — "
-                              "never a difference, total or percentage "
-                              "you calculated yourself.")
+                    "error": ("Your reply used numbers from a tool that does "
+                              "not answer this question. Rewrite it using "
+                              "ONLY data from the tool matching the "
+                              "question's subject, quoting those numbers "
+                              "verbatim.")
                 })
-            elif not insights._numbers_in(reply or ""):
-                # Number-free reply still failed the gate: a greeting,
-                # capabilities question or misfired refusal whose text
-                # tripped the checker (e.g. digits in "top 3"). Telling
-                # it to "call a tool" here caused a fallback spiral —
-                # the correct fix is a plain-words rewrite.
+            else:  # not specific_r: clean prose, but nobody named
+                telemetry["specificity_retried"] = True
+                print("[assistant] answer names nobody from the data — "
+                      "asking for a specific, named answer")
                 observations.append({
-                    "error": ("Your reply looked like data talk but you "
-                              "fetched no data. This question needs no "
-                              "tool: reply in plain conversational words "
-                              "with NO digits at all — spell any count "
-                              "out (\"three\", not \"3\").")
-                })
-                reply = None
-                continue
-            else:
-                observations.append({
-                    "error": ("Your reply contained numbers but you "
-                              "called no tool this turn. Call the right "
-                              "tool first, then answer using ONLY numbers "
-                              "from its result.")
+                    "error": ("Your reply is too vague to act on: it names no "
+                              "employee or product from tool_results. Commit "
+                              "to specifics — name the actual people or "
+                              "products involved, quote their numbers exactly "
+                              "as they appear in tool_results, and advise on "
+                              "them.")
                 })
             context["tool_results"] = observations
             reply = None
@@ -624,10 +706,11 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     if refused:
         # Already sanitized in the loop (numbers -> fixed refusal text).
         pass
-    elif not (_narration_grounded(reply or "", accumulated)
-              and _narration_relevant(reply or "", accumulated, domain)):
-        # Covers BOTH failure shapes: fabricated numbers WITH tool data,
-        # and a digits-in-prose chit-chat reply with NO data behind it.
+    elif not _gates_pass(reply or "", accumulated, domain):
+        # Covers every failure shape: fabricated numbers WITH tool
+        # data, a digits-in-prose chit-chat reply with NO data behind
+        # it, and a vague number-free answer that names nobody from a
+        # classified question's data.
         # With a right-domain payload in hand, the deterministic
         # synthesizer is tried FIRST — a plain correct answer built
         # from the tool result beats an honest apology.
@@ -659,10 +742,8 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     if refused:
         telemetry["shipped_grounded"] = not insights._numbers_in(reply or "")  # noqa: SLF001
     else:
-        telemetry["shipped_grounded"] = (_narration_grounded(reply or "", accumulated)
-                                         and _narration_relevant(reply or "",
-                                                                 accumulated,
-                                                                 domain))
+        telemetry["shipped_grounded"] = _gates_pass(reply or "",
+                                                    accumulated, domain)
 
     persist_turn(db, owner_id, "assistant", reply,
                  tool_calls=executed or None)
