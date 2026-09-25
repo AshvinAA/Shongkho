@@ -465,6 +465,25 @@ at any depth":
    fallbacks run-to-run; digits still leak into chit-chat (caught by
    the gate). Guardrails NEVER shipped an ungrounded number across
    all live eval runs.
+11. **Part B auto-fetch rescue (the 3B ceiling, engineered around).**
+   Live runs showed llama sometimes WILL NOT issue the tool call for
+   a data question no matter how the corrective retry is worded —
+   the loop then double-failed into the honest fallback. Since the
+   loop knows the question, the fetch is now deterministic: after a
+   no-data narration double-fail on a question matching
+   (question-word + time-word), the loop calls the obvious tool
+   ITSELF (`_auto_tool_for`: employee keyword or a literal employee
+   name → get_employee_performance scoped to that name; otherwise
+   get_sales_metrics; args always complete) and gives the model one
+   more round to narrate REAL data. One auto-fetch per turn,
+   cap-bounded, telemetry `meta.auto_fetch`. This turned the worst
+   failure mode ("How much has Rahim sold today?" → dead fallback)
+   into a correct grounded answer. Conversation asks still degrade
+   to the canned co-pilot line when llama digits its chit-chat —
+   acceptable; the line IS the designed answer for capabilities
+   questions. Auto-fetch hints are conservative; both guidance
+   examples (fire-an-employee pushback) and rescue routing degrade
+   to honest fallbacks when unmatched.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-

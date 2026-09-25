@@ -75,6 +75,12 @@ _DATA_HINT_RE = re.compile(
     r"staff|stock|inventory|order|orders|today|yesterday|week|month|"
     r"trend|top|best|most|least|compare|how much|how many)\b", re.I)
 
+# Auto-fetch rescue (see _auto_tool_for): a question that names a
+# metric-word AND a time-word is unambiguously a data request — when
+# llama refuses to call the tool itself, the loop fetches for it.
+_AUTO_TOOL_HINT_RE = re.compile(
+    r"\b(how|what|who)\b.*\b(today|week|month)\b", re.I)
+
 
 class AssistantUnavailable(Exception):
     """The LLM provider is not configured — deterministic 503 path."""
@@ -162,6 +168,39 @@ def _window_projection(db, owner_id: int):
     } for r in reversed(rows)]
 
 
+def _auto_tool_for(db, owner_id: int, message: str):
+    """
+    Deterministic rescue mapping for the auto-fetch: returns the
+    (tool, args) a correct model would have called for this question,
+    or None when the phrasing is not confidently mappable. Conservative
+    on purpose — a wrong auto-fetch wastes a round; a missed one just
+    degrades to the honest fallback as before. Args are ALWAYS complete
+    (an incomplete mapping would ValueError and rescue nothing).
+
+    Employee detection: a keyword OR a literal employee NAME of this
+    store in the question ("How much has Rahim sold today?" has no
+    keyword — the name IS the signal) — then the fetch is scoped to
+    that person via the tool's contains-match arg.
+    """
+    import models
+    text = message or ""
+    if not _AUTO_TOOL_HINT_RE.search(text):
+        return None
+    low = text.lower()
+    names = [e.name for e in
+             db.query(models.Employee)
+             .filter(models.Employee.employer_id == owner_id).all()
+             if e.name and e.name.lower() in low]
+    today = date.today().isoformat()
+    if names or re.search(r"\b(employee|staff|worker|seller|selling)\b",
+                          text, re.I):
+        args = {"start": today, "end": today}
+        if names:
+            args["employee_name"] = names[0]
+        return ("get_employee_performance", args)
+    return ("get_sales_metrics", {"start": today, "end": today})
+
+
 def _tools_summary() -> str:
     """One line per registry tool: name(args) — description."""
     lines = []
@@ -217,6 +256,7 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         "context_bytes": [],           # per-round prompt size (cost proxy)
         "fallback_reason": None,       # decision_error | cap_exhausted |
                                        # narration_double_fail | no_reply
+        "auto_fetch": False,           # loop fetched the data itself
     }
 
     # Persist the user turn FIRST (audit + window projection).
@@ -311,6 +351,40 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
             # no tool called at all. Feed the failure back once; if it
             # happens again the post-loop gate replaces the message.
             if narration_retried or _round >= TOOL_CALL_CAP - 1:
+                # DOUBLE-FAIL RESCUE: a data-flavored question the model
+                # answered twice without fetching. Prompting a 3B model
+                # a third time does not help (live-verified), so the
+                # loop fetches the obvious tool ITSELF and lets the
+                # model narrate real data. Still cap-bounded: this
+                # consumes the round like any other action.
+                if narration_retried and not accumulated \
+                        and not telemetry["auto_fetch"]:
+                    # At most ONE auto-fetch per turn: if it fails or
+                    # the model still cannot narrate, the honest
+                    # fallback is better than burning every round.
+                    auto = _auto_tool_for(db, owner_id, user_message)
+                    if auto:
+                        name, args = auto
+                        print(f"[assistant] model would not fetch — "
+                              f"auto-fetching {name}")
+                        executed.append({"tool": name, "args": args})
+                        telemetry["auto_fetch"] = True
+                        try:
+                            payload = tools.execute(db, owner_id, name, args)
+                        except ValueError as exc:
+                            observations.append({"tool": name,
+                                                 "error": str(exc)})
+                            telemetry["tool_errors"].append(
+                                {"tool": name, "error": str(exc)})
+                            context["tool_results"] = observations
+                            break
+                        accumulated.append({"tool": name,
+                                            "data": payload})
+                        observations.append({"tool": name,
+                                             "result": payload})
+                        telemetry["tool_calls_ok"] += 1
+                        context["tool_results"] = observations
+                        continue
                 break
             narration_retried = True
             telemetry["narration_retried"] = True
