@@ -79,7 +79,61 @@ _DATA_HINT_RE = re.compile(
 # metric-word AND a time-word is unambiguously a data request — when
 # llama refuses to call the tool itself, the loop fetches for it.
 _AUTO_TOOL_HINT_RE = re.compile(
-    r"\b(how|what|who)\b.*\b(today|week|month)\b", re.I)
+    r"\b(how|what|who|which)\b.*\b(today|yesterday|this week|last week|"
+    r"this month|last month)\b", re.I)
+
+# Sentences that merely MENTION time words ("yesterday's bestseller",
+# "my sales this week were...") are statements/opinions, not requests
+# for current data — the rescue must not fire on them.
+_NOT_A_REQUEST_RE = re.compile(
+    r"\b(think|guess|opinion|was|were|had|has been|thanks|thank you|"
+    r"great|nice|good job)\b", re.I)
+
+# ---- question-domain classification (relevance gating) ----
+# Live-found failure: "Who is the worst performing employee?" -> llama
+# fetched PRODUCTS and answered with a product's revenue. Every number
+# was REAL, so the number-checker passed it — but the answer did not
+# address the question. Numbers must be not only real but RELEVANT:
+# an employee question must be grounded in employee data, etc.
+_DOMAIN_HINTS = {
+    "employee": re.compile(
+        r"\b(employee|employees|staff|worker|workers|team|seller|sellers|"
+        r"performing|performer|performers|firing|fire|who is|who was|who's|"
+        r"which employee)\b", re.I),
+    "product": re.compile(
+        r"\b(product|products|item|items|stock|inventory|sku|best.?seller|"
+        r"bestselling|most sold|push)\b", re.I),
+}
+# Words that make a phrase NOT about employees even when other hints
+# fire ("best-selling product", "most sold item").
+_PRODUCT_OVERRIDE_RE = re.compile(
+    r"\b(product|products|item|items|sku|most sold|best.?seller)", re.I)
+
+
+def _auto_fetch(db, owner_id: int, tool: str, args: dict,
+                executed: list, observations: list, accumulated: list,
+                telemetry: dict, context: dict) -> bool:
+    """
+    Deterministic rescue fetch shared by both rescue paths (narration
+    double-fail and refuse-on-classified-question). Executes the tool,
+    records it, and returns True when data landed. Exactly-once per
+    turn is enforced by the caller via telemetry["auto_fetch"].
+    """
+    print(f"[assistant] model would not fetch — auto-fetching {tool}")
+    executed.append({"tool": tool, "args": args})
+    telemetry["auto_fetch"] = True
+    try:
+        payload = tools.execute(db, owner_id, tool, args)
+    except ValueError as exc:
+        observations.append({"tool": tool, "error": str(exc)})
+        telemetry["tool_errors"].append({"tool": tool, "error": str(exc)})
+        context["tool_results"] = observations
+        return False
+    accumulated.append({"tool": tool, "data": payload})
+    observations.append({"tool": tool, "result": payload})
+    telemetry["tool_calls_ok"] += 1
+    context["tool_results"] = observations
+    return True
 
 
 class AssistantUnavailable(Exception):
@@ -168,7 +222,7 @@ def _window_projection(db, owner_id: int):
     } for r in reversed(rows)]
 
 
-def _auto_tool_for(db, owner_id: int, message: str):
+def _auto_tool_for(db, owner_id: int, message: str, domain: str | None = None):
     """
     Deterministic rescue mapping for the auto-fetch: returns the
     (tool, args) a correct model would have called for this question,
@@ -184,21 +238,49 @@ def _auto_tool_for(db, owner_id: int, message: str):
     """
     import models
     text = message or ""
-    if not _AUTO_TOOL_HINT_RE.search(text):
-        return None
     low = text.lower()
     names = [e.name for e in
              db.query(models.Employee)
              .filter(models.Employee.employer_id == owner_id).all()
              if e.name and e.name.lower() in low]
     today = date.today().isoformat()
-    if names or re.search(r"\b(employee|staff|worker|seller|selling)\b",
-                          text, re.I):
+    # Wrong-domain rescue: the model fetched the OTHER section and the
+    # relevance gate bounced it — fetch what the question actually
+    # asked about (worst employee → employee data, not products).
+    if domain == "employee":
         args = {"start": today, "end": today}
         if names:
             args["employee_name"] = names[0]
         return ("get_employee_performance", args)
+    if domain == "product":
+        return ("get_top_products",
+                {"start": today, "end": today, "metric": "revenue",
+                 "limit": 5})
     return ("get_sales_metrics", {"start": today, "end": today})
+
+
+def _question_domain(db, owner_id: int, message: str) -> str | None:
+    """
+    'employee' | 'product' | None — which data domain the question is
+    ABOUT. Employee detection includes literal employee NAMES of this
+    store ("How is Rahim doing?" mentions no keyword). Product hints
+    override employee hints ("best-selling PRODUCT" is a product
+    question); anything ambiguous returns None and is gated as before.
+    """
+    import models
+    text = message or ""
+    if _DOMAIN_HINTS["product"].search(text):
+        return "product"
+    if _DOMAIN_HINTS["employee"].search(text):
+        if _PRODUCT_OVERRIDE_RE.search(text):
+            return "product"
+        return "employee"
+    low = text.lower()
+    for e in (db.query(models.Employee)
+              .filter(models.Employee.employer_id == owner_id).all()):
+        if e.name and e.name.lower() in low:
+            return "employee"
+    return None
 
 
 def _tools_summary() -> str:
@@ -223,6 +305,83 @@ def _narration_grounded(message: str, tool_results: list) -> bool:
         return not insights._numbers_in(message)  # noqa: SLF001
     bundle = {"results": tool_results}
     return insights._check_text(message, bundle, "bundle")  # noqa: SLF001
+
+
+def _narration_relevant(message: str, tool_results: list,
+                        domain: str | None) -> bool:
+    """
+    RELEVANCE gate on top of the reality gate: the answer's numbers must
+    come from the domain the question asked about (live-found failure:
+    an employee question answered with REAL product numbers shipped).
+    Only the message's NUMBERS must live in the right domain — number-
+    free advice text may draw on any fetched context. Ambiguous or
+    unclassifiable questions (domain None) are gated for reality only.
+    """
+    if domain is None or not tool_results:
+        return True
+    have = {r.get("tool") for r in tool_results if isinstance(r, dict)}
+    wanted = {"get_employee_performance"} if domain == "employee" \
+        else {"get_top_products"}
+    if have & wanted:
+        return True
+    # Wrong-domain numbers present: allow only if the message contains
+    # NO numbers at all (pure qualitative advice).
+    return not insights._numbers_in(message)  # noqa: SLF001
+
+
+# ---------------------------------------------------------
+# Deterministic final synthesis (auto-fetch path)
+# ---------------------------------------------------------
+def _synth_answer(user_message: str, domain: str | None,
+                  accumulated: list) -> str | None:
+    """
+    Template answer built DIRECTLY from a right-domain tool payload —
+    the no-LLM end of the rescue ladder. When the loop has fetched the
+    data the question needs and the 3B model still cannot narrate it,
+    a plain correct answer beats an honest apology. Returns None when
+    no template fits (then the honest fallback ships as before).
+    Every number is copied verbatim from the payload, so the checker
+    passes by construction.
+    """
+    res = next((r for r in reversed(accumulated)
+                if isinstance(r, dict) and r.get("tool")
+                == "get_employee_performance"), None)
+    if res and domain == "employee":
+        lanes = [e for e in (res["data"].get("employees") or [])
+                 if not e.get("is_owner")]
+        if lanes:
+            top, trail = lanes[0], lanes[-1]
+            return (f"{top['name']} leads your staff with "
+                    f"{top['revenue']} in revenue across "
+                    f"{top['orders']} orders (profit {top['profit']}). "
+                    f"{trail['name']} trails at {trail['revenue']} "
+                    f"({trail['orders']} orders)."
+                    + (" That gap is worth a conversation before it "
+                       "becomes a trend — coach, don't cut."
+                       if top['name'] != trail['name'] else ""))
+    prod = next((r for r in reversed(accumulated)
+                 if isinstance(r, dict) and r.get("tool")
+                 == "get_top_products"), None)
+    if prod and domain == "product":
+        rows = prod["data"].get("products") or []
+        if rows:
+            lead = rows[0]
+            return (f"{lead['name']} is your top product by "
+                    f"{prod['data'].get('metric', 'revenue')} — "
+                    f"{lead['revenue']} revenue, {lead['units']} units, "
+                    f"{lead['profit']} profit. Worth pushing hard this "
+                    "week while the trend holds.")
+    sales = next((r for r in reversed(accumulated)
+                  if isinstance(r, dict) and r.get("tool")
+                  == "get_sales_metrics"), None)
+    if sales:
+        tot = sales["data"].get("totals") or {}
+        if tot:
+            return (f"Your store took {tot.get('revenue')} in revenue "
+                    f"across {tot.get('orders')} orders "
+                    f"(profit {tot.get('profit')}) for the period you "
+                    "asked about.")
+    return None
 
 
 # ---------------------------------------------------------
@@ -266,6 +425,9 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     # key): a 3B model treats an absent key as "nothing to do" and
     # answers from memory. With `tool_results: []` in front of it, the
     # few-shot examples in CHAT_SYSTEM_PROMPT route it to a tool call.
+    # Classify the question's data domain ONCE per turn (relevance
+    # gating + wrong-domain rescue use it; see _question_domain).
+    domain = _question_domain(db, owner_id, user_message)
     context = {
         "today": date.today().isoformat(),
         "conversation": _window_projection(db, owner_id),
@@ -322,6 +484,19 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                 telemetry["grounded_first_pass"] = False
                 telemetry["fallback_reason"] = "refuse_after_data"
                 break
+            # Refusal on a CLASSIFIED store question is a misfire too
+            # (live-found: wrong tool -> ValueError -> give up and
+            # refuse). The loop knows what data the question needs:
+            # rescue-fetch it instead of shipping the refusal.
+            if domain and not telemetry["auto_fetch"] \
+                    and _round < TOOL_CALL_CAP - 1:
+                narration_retried = True
+                telemetry["narration_retried"] = True
+                auto = _auto_tool_for(db, owner_id, user_message, domain)
+                if auto and _auto_fetch(db, owner_id, auto[0], auto[1],
+                                        executed, observations,
+                                        accumulated, telemetry, context):
+                    continue
             # Out-of-scope refusal: ship as-is when clean. A number
             # inside a refusal is ungrounded prose — sanitize to the
             # fixed text immediately (a retry cannot help: the model
@@ -340,7 +515,9 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
 
         if action == "final":
             reply = decision.get("message")
-            grounded = _narration_grounded(reply or "", accumulated)
+            grounded = (_narration_grounded(reply or "", accumulated)
+                        and _narration_relevant(reply or "", accumulated,
+                                                domain))
             if telemetry["grounded_first_pass"] is None:
                 telemetry["grounded_first_pass"] = grounded
             if grounded:
@@ -362,28 +539,15 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                     # At most ONE auto-fetch per turn: if it fails or
                     # the model still cannot narrate, the honest
                     # fallback is better than burning every round.
-                    auto = _auto_tool_for(db, owner_id, user_message)
+                    auto = _auto_tool_for(db, owner_id, user_message,
+                                          domain)
                     if auto:
                         name, args = auto
-                        print(f"[assistant] model would not fetch — "
-                              f"auto-fetching {name}")
-                        executed.append({"tool": name, "args": args})
-                        telemetry["auto_fetch"] = True
-                        try:
-                            payload = tools.execute(db, owner_id, name, args)
-                        except ValueError as exc:
-                            observations.append({"tool": name,
-                                                 "error": str(exc)})
-                            telemetry["tool_errors"].append(
-                                {"tool": name, "error": str(exc)})
-                            context["tool_results"] = observations
+                        if not _auto_fetch(db, owner_id, name, args,
+                                           executed, observations,
+                                           accumulated, telemetry,
+                                           context):
                             break
-                        accumulated.append({"tool": name,
-                                            "data": payload})
-                        observations.append({"tool": name,
-                                             "result": payload})
-                        telemetry["tool_calls_ok"] += 1
-                        context["tool_results"] = observations
                         continue
                 break
             narration_retried = True
@@ -460,12 +624,22 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     if refused:
         # Already sanitized in the loop (numbers -> fixed refusal text).
         pass
-    elif not _narration_grounded(reply or "", accumulated):
+    elif not (_narration_grounded(reply or "", accumulated)
+              and _narration_relevant(reply or "", accumulated, domain)):
         # Covers BOTH failure shapes: fabricated numbers WITH tool data,
         # and a digits-in-prose chit-chat reply with NO data behind it.
-        print("[assistant] narration failed the number check — "
-              "replacing message with the fallback")
-        if accumulated:
+        # With a right-domain payload in hand, the deterministic
+        # synthesizer is tried FIRST — a plain correct answer built
+        # from the tool result beats an honest apology.
+        synth = _synth_answer(user_message or "", domain, accumulated)
+        if synth is not None:
+            print("[assistant] narration failed — shipping the "
+                  "deterministic synthesis from tool data")
+            reply = synth
+            telemetry["fallback_reason"] = "synthesized"
+        elif accumulated:
+            print("[assistant] narration failed the number check — "
+                  "replacing message with the fallback")
             reply = NARRATION_FALLBACK
             telemetry["fallback_reason"] = "narration_double_fail"
         else:
@@ -485,7 +659,10 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     if refused:
         telemetry["shipped_grounded"] = not insights._numbers_in(reply or "")  # noqa: SLF001
     else:
-        telemetry["shipped_grounded"] = _narration_grounded(reply or "", accumulated)
+        telemetry["shipped_grounded"] = (_narration_grounded(reply or "", accumulated)
+                                         and _narration_relevant(reply or "",
+                                                                 accumulated,
+                                                                 domain))
 
     persist_turn(db, owner_id, "assistant", reply,
                  tool_calls=executed or None)

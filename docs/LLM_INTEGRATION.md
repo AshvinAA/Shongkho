@@ -479,11 +479,41 @@ at any depth":
    cap-bounded, telemetry `meta.auto_fetch`. This turned the worst
    failure mode ("How much has Rahim sold today?" → dead fallback)
    into a correct grounded answer. Conversation asks still degrade
-   to the canned co-pilot line when llama digits its chit-chat —
+   to the canned   co-pilot line when llama digits its chit-chat —
    acceptable; the line IS the designed answer for capabilities
    questions. Auto-fetch hints are conservative; both guidance
    examples (fire-an-employee pushback) and rescue routing degrade
    to honest fallbacks when unmatched.
+12. **Part B relevance gate (grounding ≠ relevance).** Live-found:
+   "Who is the worst performing employee?" was answered with a
+   PRODUCT's real revenue — the number checker passed it because the
+   numbers were real; nothing required them to be RELEVANT. The loop
+   now classifies the question's data domain once per turn
+   (`_question_domain`: employee/product keywords + this store's
+   literal employee names; product hints override employee hints;
+   ambiguous → None = reality-gate only) and the narration gate
+   additionally requires the message's NUMBERS to come from the
+   right domain's tool (`_narration_relevant`; number-free advice
+   text may draw on any fetched context). A wrong-domain shipment is
+   one auto-fetch rescue away: the loop fetches the domain the
+   question asked about and retries narration. Same invariant as
+   ever: a right-domain fetch + honest fallback beats a wrong-domain
+   answer.
+13. **Deterministic final synthesis (rescue ladder's last rung).**
+   Live runs showed the 3B model sometimes cannot narrate even real,
+   right-domain data (grounding_first_pass ~50% on employee
+   phrasings, oscillating run-to-run). Since the loop owns verified
+   tool payloads, `_synth_answer` builds the final answer DIRECTLY
+   from them — employee ranking ("X leads with R across N orders…Y
+   trails at…"), top-product push, or sales totals — every number
+   copied verbatim, checker-clean by construction. Order of last
+   resort: model narration → synthesis → honest fallback. Telemetry
+   `fallback_reason: "synthesized"`. This took employee-question
+   fallbacks from ~50% to 0% in live eval; the trade-off is a plainer
+   voice on rescued turns. The longer-term fix is a hosted model:
+   the whole rescue ladder (auto-fetch, refuse-retry, synthesis)
+   exists to compensate for 3B tool-discipline, and Gemini makes
+   most of it redundant while keeping it as a safety net.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-
