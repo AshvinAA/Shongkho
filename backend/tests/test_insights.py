@@ -317,6 +317,34 @@ class TestNumberChecker:
         assert insights._normalize_basis(
             bundle, "current_dto.products.top_by_revenue[9].revenue", text) is None
 
+    def test_nested_section_index_repair(self):
+        """Live-found llama shorthand: 'current_dto.employees[0].revenue'
+        when the bundle nests the list under a same-named section
+        ({employees: {employees: [...]}}). Repair repeats the section,
+        and the observation is then judged on its NUMBERS."""
+        bundle = {"current_dto": {"employees": {"employees": [
+            {"name": "Rahim", "revenue": 1350.0, "orders": 3},
+            {"name": "Karim", "revenue": 410.0, "orders": 2},
+        ]}}}
+        text = "Rahim made 1350.0 across 3 orders."
+        basis = insights._normalize_basis(
+            bundle, "current_dto.employees[0].revenue", text)
+        # The text cites orders too, so the too-narrow walk-up widens
+        # the repaired leaf to the employee element that grounds it all.
+        assert basis == "current_dto.employees.employees.0"
+        assert insights._check_text(text, bundle, basis)
+        # Out-of-range index: nothing to repair into — still fails.
+        assert insights._normalize_basis(
+            bundle, "current_dto.employees[9].revenue", text) is None
+        # A list section cited with an index KEEPS the index (no wrong
+        # widening to the whole list when the tail is not nested).
+        flat = {"current_dto": {"products": {"top_by_revenue": [
+            {"name": "A", "revenue": 900.0}]}}}
+        assert insights._normalize_basis(
+            flat, "current_dto.products.top_by_revenue[0].revenue",
+            "Product A made 900.") == \
+            "current_dto.products.top_by_revenue.0.revenue"
+
 
 # ---------------------------------------------------------
 # build_insights — full contract

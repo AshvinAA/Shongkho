@@ -255,6 +255,33 @@ class TestRunLifecycle:
         new_id = pipeline.start_run(db_session, owner_id=owner["user_id"], period="week", enqueue=None)
         assert new_id != run_id
 
+    def test_stale_active_run_is_reaped_not_conflicted(self, db_session, owner):
+        """A QUEUED/RUNNING row older than the timeout is a dead lock
+        (crashed server mid-run): the next click reaps it and proceeds
+        instead of 409-ing forever."""
+        stale = models.AnalysisRun(owner_id=owner["user_id"], status="RUNNING")
+        stale.started_at = datetime.utcnow() - timedelta(
+            minutes=pipeline.STALE_RUN_TIMEOUT_MIN + 1)
+        db_session.add(stale)
+        db_session.commit()
+
+        new_id = pipeline.start_run(db_session, owner_id=owner["user_id"],
+                                    period="week", enqueue=None)
+        assert new_id != stale.id
+        db_session.refresh(stale)
+        assert stale.status == "FAILED"
+        assert "reaped" in (stale.failure_reason or "").lower()
+
+    def test_recent_active_run_still_conflicts(self, db_session, owner):
+        """A genuinely fresh RUNNING run must still 409 (no reap)."""
+        fresh = models.AnalysisRun(owner_id=owner["user_id"], status="RUNNING")
+        fresh.started_at = datetime.utcnow() - timedelta(minutes=1)
+        db_session.add(fresh)
+        db_session.commit()
+        with pytest.raises(pipeline.RunConflictError):
+            pipeline.start_run(db_session, owner_id=owner["user_id"],
+                               period="week", enqueue=None)
+
     def test_execute_run_writes_all_sections_and_completes(self, db_session, owner):
         db_session.add(models.Employee(user_id=42, name="Rahim",
                                        user_type="employee", password="x",
