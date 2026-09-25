@@ -78,6 +78,10 @@ SCENARIOS = [
          q="Who is selling the most today?", fresh=True),
     dict(id="top_products", kind="data", expected_tools=["get_top_products"],
          q="Which product should we push more this week?", fresh=True),
+    dict(id="most_sold", kind="data", expected_tools=["get_top_products"],
+         q="What is the most sold product today?", fresh=True),
+    dict(id="capabilities", kind="capabilities", expected_tools=[],
+         q="What do you really know?", fresh=True),
     dict(id="employee_named", kind="data",
          expected_tools=["get_employee_performance"],
          q="How much has Rahim sold today?", fresh=True),
@@ -89,9 +93,12 @@ SCENARIOS = [
          expected_tools=["get_employee_performance", "get_top_products"],
          q="Compare Rahim's sales today against our best-selling product.",
          fresh=True),
-    # ---- out-of-scope (refusal expected, no tools) ----
-    dict(id="smalltalk", kind="out_of_scope", expected_tools=[],
+    # ---- conversation (warm number-free reply, no tools, no refusal) ----
+    dict(id="smalltalk", kind="conversation", expected_tools=[],
          q="Hey, how's your day going?", fresh=True),
+    dict(id="capabilities", kind="conversation", expected_tools=[],
+         q="What do you really know?", fresh=True),
+    # ---- out-of-scope (refusal expected, no tools) ----
     dict(id="world_knowledge", kind="out_of_scope", expected_tools=[],
          q="What's the weather tomorrow?", fresh=True),
     dict(id="prediction", kind="out_of_scope", expected_tools=[],
@@ -245,6 +252,11 @@ def aggregate(rows):
             [r for r in oos_rows if r["refused"]], oos_rows),
         "over_refusal_rate": pct(
             [r for r in data_rows if r["refused"]], data_rows),
+        "conversation_answered": pct(
+            [r for r in rows if r["kind"] == "conversation"
+             and not r["refused"] and not r["fallback_reason"]
+             and not r["tool_seq"]],
+            [r for r in rows if r["kind"] == "conversation"]),
         "tool_selection_accuracy": pct(
             [r for r in data_rows if r["tool_selection_ok"]], data_rows),
         "answered_without_data_rate": pct(

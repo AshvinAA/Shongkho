@@ -439,6 +439,32 @@ at any depth":
    point at the dashboard charts instead of "above". Frontend: the
    panel renders messages only (UiBlockList removed); suggestion
    chips ask advice questions.
+10. **Part B routing v2 (live-driven, llama3.2 tuning).** The chat
+   prompt is an ordered QUESTION-ASKER (Q1 conversation → Q2 store
+   data → Q3 refuse), because option-framing swings 3B behavior
+   wildly: a refuse-first ordering made it a refuse-bot (in-scope
+   questions refused), a tool-first "default" made it fetch on
+   "how are you". Each observed failure shape got a WRONG/RIGHT
+   example pair — examples outperform rules on llama by a wide
+   margin, but the final-answer example must contain NO copyable
+   numbers/names (it was quoted verbatim into real answers; the
+   checker correctly killed those) and the WRONG example must
+   directly counter the observed failure. Chat temperature 0.2
+   (0.4 made routing flaky, 0.1 verbatim-copied examples),
+   num_predict 700 (advice answers truncated at 512). The loop's
+   corrective narration retry now branches on failure shape (has
+   data → "quote verbatim, never compute"; no data + number-free →
+   "plain words, no digits"; no data + numbers → "call the tool
+   first"), and a no-data double-fail ships a friendly canned line
+   (co-pilot pitch for conversation asks, honest "couldn't pull the
+   numbers" for data asks — `conversation_double_fail` in meta).
+   Refuse-after-fetching gets one corrective retry, then the fixed
+   REFUSAL_AFTER_DATA_FALLBACK (its own text was observed echoing
+   the corrective error verbatim). Residual 3B limits: multi-part
+   employee questions oscillate between perfect answers and honest
+   fallbacks run-to-run; digits still leak into chit-chat (caught by
+   the gate). Guardrails NEVER shipped an ungrounded number across
+   all live eval runs.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-
