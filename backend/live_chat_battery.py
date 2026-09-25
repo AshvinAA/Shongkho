@@ -3,14 +3,16 @@ Live Part B battery: conversational analytics against LOCAL Ollama.
 
 Runs the real agent loop (tools + decision protocol + persistence) on a
 fresh SQLite DB seeded with a small store, over several owner turns —
-including an out-of-scope question and a follow-up that should reuse
-conversation context.
+including an out-of-scope question and an advice-voice probe. The
+product is TEXT-ONLY: the deliverable is `message`; tool payloads
+ground the numbers and are audited in `tool_calls`, but nothing
+graphical is expected in the envelope (asserting that here).
 
 Run from backend/:
     LLM_PROVIDER=ollama LLM_BUDGET_SECONDS=120 python live_chat_battery.py
 """
-import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -68,12 +70,20 @@ def seed(tmpdir):
     return db
 
 
+# (question, expectation): final-with-data -> tools then grounded advice;
+# refusal -> no tools, no numbers. Voice/quality is judged by eye; the
+# hard contract (text-only envelope, grounded numbers) is checked below.
 TURNS = [
     ("How did the shop do today?", "final-with-data"),
-    ("Who is selling the most today?", "final-with-data"),
     ("Which product should we push more this week?", "final-with-data"),
+    ("Can you tell me which products I should target for marketing for "
+     "the next 7 days to maximise my profit?", "final-with-data"),
     ("What's the weather tomorrow?", "refusal"),
 ]
+
+_ADVICE_HINTS = (
+    re.compile(r"\b(could|try|consider|suggest|push|focus|watch|keep|ask)\b", re.I),
+)
 
 
 def main():
@@ -90,28 +100,53 @@ def main():
             print(f"\nOWNER: {text}\n  429: daily cap reached")
             continue
         el = time.monotonic() - t0
-        blocks = ", ".join(b["type"] for b in out["ui_blocks"]) or "-"
+        meta = out.get("meta") or {}
         toolcalls = ", ".join(tc["tool"] for tc in out["tool_calls"]) or "-"
         print(f"\nOWNER: {text}")
-        print(f"  [{el:.1f}s | tools: {toolcalls} | blocks: {blocks}]")
+        print(f"  [{el:.1f}s | rounds: {meta.get('rounds_used')} | "
+              f"tools: {toolcalls} | grounded: {meta.get('shipped_grounded')}]")
         print(f"  ASSISTANT: {out['message']}")
-        if expectation == "refusal":
-            ok = out["tool_calls"] == []
-        else:
-            ok = True  # voice/quality judged by eye; contract checked below
-        if out["message"] in (assistant.FALLBACK_MESSAGE, None):
+        ok = True
+
+        # ---- hard contract checks (text-only product) ----
+        if "ui_blocks" in out:
+            print("  !! CONTRACT: envelope must not carry ui_blocks")
+            failures += 1
+        msg = out["message"] or ""
+        if msg in (assistant.FALLBACK_MESSAGE, assistant.NARRATION_FALLBACK,
+                   assistant.REFUSAL_FALLBACK, None, ""):
             ok = False
             failures += 1
-        if expectation != "refusal" and not out["ui_blocks"] and "not able" in (out["message"] or ""):
+        if not meta.get("shipped_grounded"):
+            print("  !! CONTRACT: shipped message is not checker-clean")
             failures += 1
+
+        if expectation == "refusal":
+            if out["tool_calls"] or not meta.get("refused"):
+                print("  !! expected a refusal (no tools)")
+                failures += 1
+        else:
+            # Advisory voice probe: the answer should DO something with
+            # the numbers, not just recite them.
+            if not any(h.search(msg) for h in _ADVICE_HINTS):
+                print("  !! VOICE: no advisory language (actions/alternatives) "
+                      "in the reply")
+                failures += 1
 
     # Persistence + cap check
     n = assistant.messages_today(db, 1)
     print(f"\nassistant turns persisted today: {n} (cap {assistant.DAILY_CAP})")
     hist = assistant.chat_history(db, 1)
-    print(f"history reload: {len(hist)} turns (user+assistant)")
+    print(f"history reload: {len(hist)} turns (user+assistant, text-only)")
     if n != 2 * len(TURNS):
         failures += 1
+
+    # Envelope of a fresh turn must be exactly {message, tool_calls, meta}.
+    out = assistant.handle_message(db, 1, "Steady day? One word is fine.")
+    if set(out.keys()) != {"message", "tool_calls", "meta"}:
+        print(f"  !! CONTRACT: unexpected envelope keys {sorted(out.keys())}")
+        failures += 1
+
     print(f"\n{'FAILURES: ' + str(failures) if failures else 'ALL CONTRACT CHECKS OK'}")
     return 1 if failures else 0
 

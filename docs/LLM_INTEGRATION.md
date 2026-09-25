@@ -423,6 +423,22 @@ at any depth":
    end-to-end, multi-turn) alongside `live_ollama_battery.py`.
    Tool payloads for arbitrary ranges intentionally omit change_pct:
    there is no like-for-like baseline outside the fixed windows.
+9. **Part B is TEXT-ONLY (product decision, post-v3.1).** The chat is
+   an advisor, not a chart host: the envelope is `{message,
+   tool_calls, meta}` — no `ui_blocks` (the DB column remains, NULL,
+   for migration safety). The LLM's deliverable is advisory prose:
+   recommendation, the numbers behind it, concrete actions, an
+   alternative with its trade-off, and pushback when the owner's plan
+   is risky. CHAT_SYSTEM_PROMPT encodes that shape (ANSWER / WHY /
+   HOW / ALTERNATIVE); general business knowledge is allowed for
+   strategy, but every NUMBER still traces to this turn's tool
+   results via the Part A checker — the guardrail is unchanged.
+   Telemetry gains `shipped_grounded` (the loop's own verdict that the
+   shipped message is checker-clean; eval_assistant.py treats False as
+   the fatal fabricated_number_leakage metric). Fallback texts now
+   point at the dashboard charts instead of "above". Frontend: the
+   panel renders messages only (UiBlockList removed); suggestion
+   chips ask advice questions.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-

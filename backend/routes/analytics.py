@@ -200,7 +200,8 @@ def assistant_chat(
     """
     One conversational-analytics turn (synchronous POST, doc §3.1).
 
-    Returns {message, ui_blocks, tool_calls}. Deterministic error
+    Returns {message, tool_calls, meta} — text-only product (no
+    ui_blocks; the charts live on the dashboard). Deterministic error
     contract: 503 when the assistant is not configured, 429 when the
     owner's daily cap is spent — never a 500 for LLM/tool failures
     (those degrade to honest fallback messages inside the envelope).

@@ -365,17 +365,13 @@ class AssistantChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
-class AssistantUiBlock(BaseModel):
-    """One backend-assembled visual attached to an assistant turn."""
-    type: str                 # sales_chart | employee_leaderboard | product_table | data
-    source_tool: str
-    data: Dict[str, Any]
-
-
 class AssistantChatResponse(BaseModel):
-    """Envelope for POST /analytics/chat (doc §3.5: narration + data are
-    separate channels — the LLM writes message only, the backend assembles
-    ui_blocks from raw tool results)."""
+    """
+    Envelope for POST /analytics/chat. Text-only product: the message is
+    the deliverable (numbers checker-verified against tool results);
+    tool_calls is the audit trail (names + args only); meta carries the
+    eval telemetry.
+    """
     message: str
-    ui_blocks: List[AssistantUiBlock] = Field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
+    meta: Dict[str, Any] = Field(default_factory=dict)

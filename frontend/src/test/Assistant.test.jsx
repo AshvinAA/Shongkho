@@ -1,11 +1,11 @@
 /**
- * Assistant panel tests (Part B).
+ * Assistant panel tests (Part B, text-only).
  *
  * The API layer is mocked (same pattern as the Analytics page tests);
- * backend loop behavior is verified by the pytest suite. jsdom has no
- * layout, so chart internals are not asserted — the tests check the
- * conversation flow: history reload, send/append, ui_blocks rendering
- * hand-off, and the honest 429/503 notes.
+ * backend loop behavior is verified by the pytest suite. The tests
+ * check the conversation flow: history reload, send/append, and the
+ * honest 429/503 notes. No chart rendering exists anymore — the
+ * assistant is a prose advisor.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -31,39 +31,37 @@ beforeEach(() => {
 describe('AssistantPanel', () => {
   it('renders empty state with suggestions when no history', async () => {
     render(<AssistantPanel />)
-    expect(await screen.findByText(/Ask me anything about your store/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /How did the shop do today\?/i })).toBeInTheDocument()
+    expect(await screen.findByText(/Ask me about your store/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /maximise profit this week/i })).toBeInTheDocument()
   })
 
-  it('reloads persisted history on mount (roles + ui_blocks)', async () => {
+  it('reloads persisted history on mount (roles + text only)', async () => {
     assistantApi.getChatHistory.mockResolvedValue({
       messages: [
-        { role: 'user', message: 'How did today go?', ui_blocks: [] },
-        { role: 'assistant', message: 'Revenue was fine.', ui_blocks: [] },
+        { role: 'user', message: 'How did today go?' },
+        { role: 'assistant', message: 'Revenue was fine — steady day.' },
       ],
     })
     render(<AssistantPanel />)
     expect(await screen.findByText('How did today go?')).toBeInTheDocument()
-    expect(screen.getByText('Revenue was fine.')).toBeInTheDocument()
+    expect(screen.getByText('Revenue was fine — steady day.')).toBeInTheDocument()
     // Empty-state suggestions disappear once history exists.
-    expect(screen.queryByText(/Ask me anything about your store/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Ask me about your store/i)).not.toBeInTheDocument()
   })
 
-  it('sends a turn and appends the envelope (message + ui_blocks)', async () => {
+  it('sends a turn and appends the assistant reply', async () => {
     assistantApi.sendChat.mockResolvedValue({
-      message: 'Rahim is on fire today!',
-      ui_blocks: [{ type: 'employee_leaderboard', source_tool: 'get_employee_performance', data: { employees: [] } }],
-      tool_calls: [],
+      message: 'Push Mustard Oil 1L — it earned 780.0 profit this week. Consider a bundle with rice.',
+      tool_calls: [{ tool: 'get_top_products', args: {} }],
+      meta: {},
     })
-    const { container } = render(<AssistantPanel />)
+    render(<AssistantPanel />)
     const input = screen.getByLabelText(/message the analytics assistant/i)
-    await userEvent.type(input, 'Who is selling the most today?{Enter}')
+    await userEvent.type(input, 'What should I push this week?{Enter}')
     await waitFor(() =>
-      expect(screen.getByText('Rahim is on fire today!')).toBeInTheDocument(),
+      expect(screen.getByText(/Push Mustard Oil 1L/i)).toBeInTheDocument(),
     )
-    // The user turn echoed back, and the block renderer got the data.
-    expect(screen.getByText('Who is selling the most today?')).toBeInTheDocument()
-    expect(container.querySelector('.assistant-block')).toBeInTheDocument()
+    expect(screen.getByText('What should I push this week?')).toBeInTheDocument()
   })
 
   it('shows the honest daily-cap note on 429', async () => {

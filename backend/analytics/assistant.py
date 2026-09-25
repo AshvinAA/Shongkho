@@ -12,12 +12,11 @@ The agent loop, the memory split, and the response envelope:
     (ValueError) go back to the model as the observation for ONE counted
     corrective retry. A turn that never reaches `final` degrades to a
     fixed fallback message — never a 500.
-  - ENVELOPE: the LLM writes `message` only; ui_blocks are attached
-    from RAW tool results via a fixed tool->component mapping (doc
-    §3.5). The narration runs the Part A number checker against the
-    accumulated tool results — on failure the data blocks are kept and
-    the message is replaced with a template. The data never depends on
-    the prose.
+  - ENVELOPE: text-only product — the LLM writes `message`, and that
+    is the deliverable. The narration runs the Part A number checker
+    against the accumulated tool results; on failure the message is
+    replaced with an honest fallback pointing at the dashboard charts.
+    The checker keeps every shipped number real.
   - store_id/owner_id is injected server-side everywhere; the LLM never
     supplies scope and never gets write access to anything.
 
@@ -33,18 +32,25 @@ WINDOW_TURNS = 8       # sliding-window projection size (turns)
 DAILY_CAP = 20         # assistant messages / day / store
 TOOL_CALL_CAP = 5      # hard agent-loop bound
 
-# Fixed tool -> ui_block component mapping (doc §3.5). Adding a visual
-# later = one line here, never an LLM contract change.
-UI_BLOCK_TYPES = {
-    "get_sales_metrics": "sales_chart",
-    "get_employee_performance": "employee_leaderboard",
-    "get_top_products": "product_table",
-}
+# Text-only product: the charts live on the dashboard; the assistant's
+# deliverable is advice in prose. Tool payloads ground the numbers and
+# feed the checker — they just never render as UI blocks.
 
 FALLBACK_MESSAGE = "I wasn't able to work that out — try rephrasing?"
-NARRATION_FALLBACK = "Here's what I found."
+NARRATION_FALLBACK = (
+    "I pulled your store data but couldn't phrase the answer reliably — "
+    "the dashboard charts have the numbers. Try rephrasing?"
+)
 NOT_CONFIGURED_MESSAGE = "Assistant is not configured"
 REFUSAL_FALLBACK = "I can't answer that from store data."
+# Refusal AFTER this turn fetched data — the model was told to answer
+# with the results and refused again; its refusal text is untrustworthy
+# there (observed: it echoes the corrective error verbatim). Ship a
+# fixed honest line instead.
+REFUSAL_AFTER_DATA_FALLBACK = (
+    "I pulled the numbers but couldn't land on solid advice for that — "
+    "try rephrasing?"
+)
 
 
 class AssistantUnavailable(Exception):
@@ -81,14 +87,13 @@ def messages_today(db, owner_id: int) -> int:
 
 
 def persist_turn(db, owner_id: int, role: str, message: str,
-                 ui_blocks=None, tool_calls=None):
+                 tool_calls=None):
     """One assistant_messages row; committed by the caller's next commit."""
     import models
     row = models.AssistantMessage(
         owner_id=owner_id,
         role=role,
         message=message,
-        ui_blocks=ui_blocks,
         tool_calls=tool_calls,
     )
     db.add(row)
@@ -97,7 +102,7 @@ def persist_turn(db, owner_id: int, role: str, message: str,
 
 
 def chat_history(db, owner_id: int, limit: int = 50):
-    """Reload projection for the frontend: newest last, payloads included."""
+    """Reload projection for the frontend: newest last, text-only."""
     import models
     rows = (
         db.query(models.AssistantMessage)
@@ -109,7 +114,6 @@ def chat_history(db, owner_id: int, limit: int = 50):
     return [{
         "role": r.role,
         "message": r.message,
-        "ui_blocks": r.ui_blocks or [],
         "created_at": r.created_at.isoformat() if r.created_at else None,
     } for r in reversed(rows)]
 
@@ -165,7 +169,7 @@ def _narration_grounded(message: str, tool_results: list) -> bool:
 def handle_message(db, owner_id: int, user_message: str) -> dict:
     """
     One full assistant turn. Returns the response envelope:
-      {"message": str, "ui_blocks": [...], "tool_calls": [...]}
+      {"message": str, "tool_calls": [...], "meta": {...}}
 
     Raises AssistantUnavailable (-> 503) when the LLM is not configured,
     DailyCapReached (-> 429) when today's budget is spent. Never raises
@@ -195,13 +199,18 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     # Persist the user turn FIRST (audit + window projection).
     persist_turn(db, owner_id, "user", user_message)
 
+    # `tool_results` starts as an explicit empty cue (not an omitted
+    # key): a 3B model treats an absent key as "nothing to do" and
+    # answers from memory. With `tool_results: []` in front of it, the
+    # few-shot examples in CHAT_SYSTEM_PROMPT route it to a tool call.
     context = {
         "today": date.today().isoformat(),
         "conversation": _window_projection(db, owner_id),
+        "tool_results": [],
     }
     tools_summary = _tools_summary()
 
-    accumulated = []   # successful tool payloads (grounding + ui_blocks)
+    accumulated = []   # successful tool payloads (grounding + audit)
     executed = []      # [{tool, args}] for persistence + audit
     observations = []  # per-round results/errors fed back to the model
     reply = None
@@ -223,25 +232,55 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
             break
         action = decision.get("action")
 
-        if action in ("final", "refuse"):
+        if action == "refuse":
+            # Refuse AFTER this turn already fetched data is a 3B-model
+            # misfire (it just decided the question needed data): earn
+            # one corrective retry, same economics as a bad narration.
+            # A second one is untrustworthy text (observed: the model
+            # echoes the corrective error verbatim) — fixed line, and
+            # NOT a clean refusal for telemetry.
+            if accumulated and not narration_retried \
+                    and _round < TOOL_CALL_CAP - 1:
+                narration_retried = True
+                telemetry["narration_retried"] = True
+                print("[assistant] refuse after fetching data — asking "
+                      "the model to answer with the results instead")
+                observations.append({
+                    "error": ("You already fetched data for this "
+                              "question. Refusing now is wrong: answer "
+                              "with ONLY the numbers in tool_results.")
+                })
+                context["tool_results"] = observations
+                continue
+            if accumulated:
+                reply = REFUSAL_AFTER_DATA_FALLBACK
+                refused = True
+                telemetry["refused"] = True
+                telemetry["grounded_first_pass"] = False
+                telemetry["fallback_reason"] = "refuse_after_data"
+                break
+            # Out-of-scope refusal: ship as-is when clean. A number
+            # inside a refusal is ungrounded prose — sanitize to the
+            # fixed text immediately (a retry cannot help: the model
+            # has already decided the question is out of scope), and
+            # do not credit it as a grounded first pass.
             reply = decision.get("message")
-            refused = action == "refuse"
-            grounded = refused or _narration_grounded(reply or "", accumulated)
-            if refused and insights._numbers_in(reply or ""):  # noqa: SLF001
-                # A refusal carrying numbers is not a clean first pass.
-                grounded = False
+            refused = True
+            telemetry["refused"] = True
+            polluted = insights._numbers_in(reply or "")  # noqa: SLF001
+            telemetry["grounded_first_pass"] = not polluted
+            if polluted:
+                print("[assistant] refusal contained numbers — "
+                      "replacing with the fixed refusal text")
+                reply = REFUSAL_FALLBACK
+            break
+
+        if action == "final":
+            reply = decision.get("message")
+            grounded = _narration_grounded(reply or "", accumulated)
             if telemetry["grounded_first_pass"] is None:
                 telemetry["grounded_first_pass"] = grounded
             if grounded:
-                if refused:
-                    telemetry["refused"] = True
-                    # Refusals are prose, but a number inside one is
-                    # still ungrounded prose — replace with the fixed
-                    # refusal (audit trail keeps the original intent).
-                    if insights._numbers_in(reply or ""):  # noqa: SLF001
-                        print("[assistant] refusal contained numbers — "
-                              "replacing with the fixed refusal text")
-                        reply = REFUSAL_FALLBACK
                 break
             # Narration self-correction (same economics as the tool
             # ValueError retry, counted against the cap): the model
@@ -254,12 +293,26 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
             telemetry["narration_retried"] = True
             print("[assistant] narration failed the number check — "
                   "asking the model to fetch data first")
-            observations.append({
-                "error": ("Your reply contained numbers that no tool "
-                          "result supports (or you called no tool). "
-                          "Call the right tool first, then answer using "
-                          "ONLY numbers from its result.")
-            })
+            # The corrective message must match the failure shape: with
+            # data in hand the fix is "quote verbatim" ("call the tool
+            # first" makes the model drop ALL numbers instead); with no
+            # data the fix is to actually fetch.
+            if accumulated:
+                observations.append({
+                    "error": ("Your reply contained numbers that do not "
+                              "appear in tool_results (computed or "
+                              "invented). Rewrite it: quote ONLY numbers "
+                              "that appear verbatim in tool_results — "
+                              "never a difference, total or percentage "
+                              "you calculated yourself.")
+                })
+            else:
+                observations.append({
+                    "error": ("Your reply contained numbers but you "
+                              "called no tool this turn. Call the right "
+                              "tool first, then answer using ONLY numbers "
+                              "from its result.")
+                })
             context["tool_results"] = observations
             reply = None
             continue
@@ -288,35 +341,39 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         reply = FALLBACK_MESSAGE
         telemetry["fallback_reason"] = "cap_exhausted"
 
-    # ---- narration check: prose is decoration, data is not ----
-    ui_blocks = [{
-        "type": UI_BLOCK_TYPES.get(t["tool"], "data"),
-        "source_tool": t["tool"],
-        "data": t["data"],
-    } for t in accumulated]
-
+    # ---- narration gate: numbers in prose must trace to tool data ----
+    # Text-only product: the reply IS the deliverable, so an ungrounded
+    # reply degrades to an honest fallback that points at the charts
+    # instead of shipping a wrong number.
     if refused:
-        # Explicit out-of-scope refusal — persisted verbatim (audit).
+        # Already sanitized in the loop (numbers -> fixed refusal text).
         pass
     elif not _narration_grounded(reply or "", accumulated):
         # Covers BOTH failure shapes: fabricated numbers WITH tool data,
-        # and numbers with NO data behind them at all. The ui_blocks
-        # carry the real numbers; the prose is replaced.
+        # and numbers with NO data behind them at all.
         print("[assistant] narration failed the number check — "
-              "keeping ui_blocks, replacing message")
-        reply = NARRATION_FALLBACK if ui_blocks else FALLBACK_MESSAGE
+              "replacing message with the fallback")
+        reply = (NARRATION_FALLBACK if accumulated else FALLBACK_MESSAGE)
         telemetry["fallback_reason"] = "narration_double_fail"
     elif not reply:
         reply = FALLBACK_MESSAGE
         telemetry["fallback_reason"] = "no_reply"
 
+    # Shipped-grounding invariant for the eval harness: whatever leaves
+    # this function must be checker-clean or a fixed no-number fallback.
+    # True by construction today; a False here means a code path regressed
+    # into shipping raw model text (eval_assistant.py flags it as the
+    # fatal fabricated_number_leakage metric).
+    if refused:
+        telemetry["shipped_grounded"] = not insights._numbers_in(reply or "")  # noqa: SLF001
+    else:
+        telemetry["shipped_grounded"] = _narration_grounded(reply or "", accumulated)
+
     persist_turn(db, owner_id, "assistant", reply,
-                 ui_blocks=ui_blocks or None,
                  tool_calls=executed or None)
 
     return {
         "message": reply,
-        "ui_blocks": ui_blocks,
         "tool_calls": executed,
         "meta": telemetry,
     }

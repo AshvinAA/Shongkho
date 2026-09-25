@@ -225,14 +225,14 @@ class TestAgentLoop:
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "How's today?")
         assert out["message"] == "Steady day — keep it up!"
-        assert out["ui_blocks"] == []
+        assert out["meta"]["shipped_grounded"] is True
         # Both turns persisted.
         rows = db_session.query(models.AssistantMessage).order_by(
             models.AssistantMessage.id).all()
         assert [r.role for r in rows] == ["user", "assistant"]
 
-    def test_tool_then_final_attaches_ui_blocks(self, db_session, configured,
-                                                monkeypatch):
+    def test_tool_then_final_text_only(self, db_session, configured,
+                                       monkeypatch):
         _seed_store(db_session)
         today = date.today().isoformat()
         script = ScriptedChat([
@@ -243,14 +243,16 @@ class TestAgentLoop:
         ])
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "How's today?")
-        assert len(out["ui_blocks"]) == 1
-        block = out["ui_blocks"][0]
-        assert block["type"] == "sales_chart"
-        assert block["source_tool"] == "get_sales_metrics"
-        assert block["data"]["totals"]["revenue"] == 500.0  # raw result
+        # Text-only product: no ui_blocks anywhere in the envelope.
+        assert "ui_blocks" not in out
+        assert out["meta"]["shipped_grounded"] is True
+        assert out["meta"]["grounded_first_pass"] is True
         # tool_calls persisted as names + args only.
         assert out["tool_calls"] == [
             {"tool": "get_sales_metrics", "args": {"start": today, "end": today}}]
+        row = db_session.query(models.AssistantMessage).filter_by(
+            role="assistant").one()
+        assert row.ui_blocks is None
 
     def test_valueerror_gives_one_counted_retry(self, db_session, configured,
                                                 monkeypatch):
@@ -265,8 +267,11 @@ class TestAgentLoop:
         ])
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "Top product by profit?")
-        # The bad call consumed a round; the retry succeeded.
-        assert out["ui_blocks"][0]["data"]["metric"] == "profit"
+        # The bad call consumed a round; the retry succeeded (text-only:
+        # verify via the tool_calls audit + telemetry).
+        assert out["tool_calls"][-1]["tool"] == "get_top_products"
+        assert out["tool_calls"][-1]["args"]["metric"] == "profit"
+        assert out["meta"]["tool_calls_ok"] == 1
         # Round 2 context saw exactly the ERROR observation from round 1
         # (self-correction) — no result yet.
         assert len(script.contexts[1]["tool_results"]) == 1
@@ -287,11 +292,10 @@ class TestAgentLoop:
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "trend?")
         assert out["message"] == assistant.FALLBACK_MESSAGE
-        # Data blocks still attached (real numbers, no narration).
-        assert len(out["ui_blocks"]) == assistant.TOOL_CALL_CAP
+        assert out["meta"]["fallback_reason"] == "cap_exhausted"
 
-    def test_narration_check_keeps_ui_blocks(self, db_session, configured,
-                                             monkeypatch):
+    def test_narration_double_fail_falls_back(self, db_session, configured,
+                                              monkeypatch):
         _seed_store(db_session)
         today = date.today().isoformat()
         # Two consecutive fabricated narrations: the first earns one
@@ -306,9 +310,10 @@ class TestAgentLoop:
         ])
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "How's today?")
-        # Data survives, prose replaced by the template.
+        # Text-only: the message is replaced by the honest fallback.
         assert out["message"] == assistant.NARRATION_FALLBACK
-        assert out["ui_blocks"][0]["data"]["totals"]["revenue"] == 500.0
+        assert out["meta"]["fallback_reason"] == "narration_double_fail"
+        assert out["meta"]["shipped_grounded"] is True  # fallback is clean
 
     def test_narration_self_correction_recovers(self, db_session, configured,
                                                 monkeypatch):
@@ -324,12 +329,10 @@ class TestAgentLoop:
         ])
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "How's today?")
-        # The corrected answer ships with its data block.
+        # The corrected answer ships.
         assert out["message"] == "Revenue was 500.0 today across 2 orders."
-        assert out["ui_blocks"][0]["type"] == "sales_chart"
-        # The correction consumed one counted round: 3 rounds for 2 tool
-        # executions + the final (narration retry is not a tool call).
-        assert len(out["tool_calls"]) == 1
+        assert out["meta"]["narration_retried"] is True
+        assert out["meta"]["shipped_grounded"] is True
 
     def test_narration_with_no_data_falls_back(self, db_session, configured,
                                                monkeypatch):
@@ -339,7 +342,7 @@ class TestAgentLoop:
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "How's today?")
         assert out["message"] == assistant.FALLBACK_MESSAGE
-        assert out["ui_blocks"] == []
+        assert out["meta"]["shipped_grounded"] is True  # fallback is clean
 
     def test_refusal_persisted_verbatim(self, db_session, configured,
                                         monkeypatch):
@@ -382,11 +385,9 @@ class TestAgentLoop:
                                                           monkeypatch):
         _seed_store(db_session)
         today = date.today().isoformat()
-        # An earlier turn WITH a payload must appear name-only later.
+        # An earlier turn WITH tool calls must appear name-only later.
         db_session.add(models.AssistantMessage(
             owner_id=1, role="assistant", message="Earlier answer",
-            ui_blocks=[{"type": "sales_chart", "source_tool": "t",
-                        "data": {"totals": {"revenue": 12345.0}}}],
             tool_calls=[{"tool": "get_sales_metrics", "args": {}}],
         ))
         db_session.commit()
@@ -395,8 +396,7 @@ class TestAgentLoop:
         monkeypatch.setattr(llm, "chat_decide", script)
         assistant.handle_message(db_session, 1, "and now?")
         convo = script.contexts[0]["conversation"]
-        assert all("ui_blocks" not in turn and "tool_results" not in turn
-                   for turn in convo)
+        assert all("tool_results" not in turn for turn in convo)
         assert convo[0]["tool_names"] == ["get_sales_metrics"]
         assert convo[-1]["role"] == "user"
 
@@ -454,12 +454,15 @@ class TestChatRoutes:
         assert r.status_code == 200, r.json()
         body = r.json()
         assert body["message"] == "Revenue was 500.0 today."
-        assert body["ui_blocks"][0]["type"] == "sales_chart"
-        # History endpoint returns the persisted turns.
+        assert "ui_blocks" not in body
+        assert body["meta"]["shipped_grounded"] is True
+        # History endpoint returns the persisted turns (text-only).
         r = client.get("/api/v1/analytics/chat/history")
         assert r.status_code == 200
-        roles = [m["role"] for m in r.json()["messages"]]
+        messages = r.json()["messages"]
+        roles = [m["role"] for m in messages]
         assert roles == ["user", "assistant"]
+        assert all("ui_blocks" not in m for m in messages)
 
     def test_validation_422_on_empty_message(self, client, owner,
                                              monkeypatch):
