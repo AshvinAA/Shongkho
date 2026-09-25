@@ -1,29 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getChatHistory, sendChat } from '../../api/assistant.js'
-import UiBlockList from './UiBlockList.jsx'
 
 const SUGGESTIONS = [
-  'How did the shop do today?',
+  'What should I focus on to maximise profit this week?',
   'Who is selling the most today?',
   'Which product should we push more this week?',
 ]
 
 /**
- * Conversational analytics panel (Part B, doc §3).
+ * Conversational business assistant (Part B) — TEXT-ONLY by design.
  *
- * Owner-only. Each turn POSTs /analytics/chat; the envelope's message
- * and ui_blocks render in one scrollback (data blocks reuse the
- * dashboard's chart components via UiBlockList). History reloads on
- * mount so the conversation survives refreshes — persistence lives in
- * assistant_messages, the panel is only a view of it.
+ * The assistant is an advisor: it fetches store numbers with tools and
+ * answers with grounded advice, arguments and alternatives in prose.
+ * Charts live on the dashboard above; the chat never renders graphs.
  *
+ * Each turn POSTs /analytics/chat; history reloads on mount so the
+ * conversation survives refreshes (persistence in assistant_messages).
  * Error contract is honest: 429 (daily cap) and 503 (not configured)
  * surface as system notes; the input re-enables either way.
  */
 export default function AssistantPanel() {
   const { user } = useAuth()
-  const [history, setHistory] = useState([])   // [{role, message, ui_blocks}]
+  const [history, setHistory] = useState([])   // [{role, message}]
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
@@ -41,7 +40,7 @@ export default function AssistantPanel() {
     getChatHistory(50)
       .then((data) => {
         if (!alive) return
-        setHistory(data.messages || [])
+        setHistory((data.messages || []).map(({ role, message }) => ({ role, message })))
         scrollToEnd()
       })
       .catch(() => {}) // a dead backend just means an empty panel
@@ -53,16 +52,12 @@ export default function AssistantPanel() {
     if (!message || busy) return
     setInput('')
     setNote(null)
-    setHistory((h) => [...h, { role: 'user', message, ui_blocks: [] }])
+    setHistory((h) => [...h, { role: 'user', message }])
     setBusy(true)
     scrollToEnd()
     try {
       const out = await sendChat(message)
-      setHistory((h) => [...h, {
-        role: 'assistant',
-        message: out.message,
-        ui_blocks: out.ui_blocks || [],
-      }])
+      setHistory((h) => [...h, { role: 'assistant', message: out.message }])
     } catch (e) {
       setNote(
         e.status === 429
@@ -82,7 +77,11 @@ export default function AssistantPanel() {
       <div className="assistant-scroll" ref={scrollRef}>
         {history.length === 0 && (
           <div className="assistant-empty muted">
-            <p>Ask me anything about your store — sales, employees, products.</p>
+            <p>
+              Ask me about your store — I'll pull the numbers and give you
+              advice, alternatives, and honest pushback when a plan looks
+              risky.
+            </p>
             <div className="assistant-suggestions">
               {SUGGESTIONS.map((s) => (
                 <button key={s} type="button" className="btn btn-outline"
@@ -92,8 +91,9 @@ export default function AssistantPanel() {
               ))}
             </div>
             <p className="card-sub muted">
-              I only answer from your store's own data — no opinions, no
-              predictions, no outside facts.
+              Every number I quote comes straight from your store data —
+              I won't invent figures, and I'll say so when the data can't
+              answer something.
             </p>
           </div>
         )}
@@ -104,9 +104,6 @@ export default function AssistantPanel() {
               {turn.role === 'user' ? (user?.name || 'You') : 'Assistant'}
             </span>
             <p className="assistant-msg">{turn.message}</p>
-            {turn.role === 'assistant' && turn.ui_blocks?.length > 0 && (
-              <UiBlockList blocks={turn.ui_blocks} />
-            )}
           </div>
         ))}
         {busy && <p className="muted assistant-typing">Assistant is thinking…</p>}
@@ -117,7 +114,7 @@ export default function AssistantPanel() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about today's sales, an employee, a product…"
+          placeholder="Ask for advice — pricing, staffing, what to push…"
           disabled={busy}
           aria-label="Message the analytics assistant"
         />
