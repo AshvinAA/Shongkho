@@ -23,6 +23,7 @@ The agent loop, the memory split, and the response envelope:
 No DB transaction spans an LLM call: rows are committed per-turn, the
 LLM calls happen between commits.
 """
+import re
 from datetime import date, datetime, timedelta
 
 from analytics import insights, llm, tools
@@ -51,6 +52,28 @@ REFUSAL_AFTER_DATA_FALLBACK = (
     "I pulled the numbers but couldn't land on solid advice for that — "
     "try rephrasing?"
 )
+# A NO-DATA turn (greeting, capabilities question, misfired refusal)
+# whose reply tripped the number gate twice: llama keeps sprinkling
+# digits into chit-chat ("top 3 products"). Shipping the scary
+# "couldn't work that out" dead-end here is worse than a warm canned
+# line — nothing numerical was claimed either way.
+CONVERSATION_FALLBACK = (
+    "I'm here to be your business co-pilot — ask me which product to \
+push this week, who's selling the most today, or how profit looks, \
+and I'll pull the numbers and give you real advice."
+)
+DATA_NO_REPLY_FALLBACK = (
+    "I need to pull your store numbers to answer that properly, but \
+the step didn't come out reliably this time — try rephrasing?"
+)
+
+# Question words that mark the ask as store-data-flavored: a no-data
+# double-fail on such a question must NOT ship the cheery co-pilot
+# line ("which product to push…") — it read as dodging the question.
+_DATA_HINT_RE = re.compile(
+    r"\b(sale|sales|sold|sell|revenue|profit|product|products|employee|"
+    r"staff|stock|inventory|order|orders|today|yesterday|week|month|"
+    r"trend|top|best|most|least|compare|how much|how many)\b", re.I)
 
 
 class AssistantUnavailable(Exception):
@@ -306,6 +329,21 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                               "never a difference, total or percentage "
                               "you calculated yourself.")
                 })
+            elif not insights._numbers_in(reply or ""):
+                # Number-free reply still failed the gate: a greeting,
+                # capabilities question or misfired refusal whose text
+                # tripped the checker (e.g. digits in "top 3"). Telling
+                # it to "call a tool" here caused a fallback spiral —
+                # the correct fix is a plain-words rewrite.
+                observations.append({
+                    "error": ("Your reply looked like data talk but you "
+                              "fetched no data. This question needs no "
+                              "tool: reply in plain conversational words "
+                              "with NO digits at all — spell any count "
+                              "out (\"three\", not \"3\").")
+                })
+                reply = None
+                continue
             else:
                 observations.append({
                     "error": ("Your reply contained numbers but you "
@@ -350,11 +388,17 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         pass
     elif not _narration_grounded(reply or "", accumulated):
         # Covers BOTH failure shapes: fabricated numbers WITH tool data,
-        # and numbers with NO data behind them at all.
+        # and a digits-in-prose chit-chat reply with NO data behind it.
         print("[assistant] narration failed the number check — "
               "replacing message with the fallback")
-        reply = (NARRATION_FALLBACK if accumulated else FALLBACK_MESSAGE)
-        telemetry["fallback_reason"] = "narration_double_fail"
+        if accumulated:
+            reply = NARRATION_FALLBACK
+            telemetry["fallback_reason"] = "narration_double_fail"
+        else:
+            reply = (DATA_NO_REPLY_FALLBACK
+                     if _DATA_HINT_RE.search(user_message or "")
+                     else CONVERSATION_FALLBACK)
+            telemetry["fallback_reason"] = "conversation_double_fail"
     elif not reply:
         reply = FALLBACK_MESSAGE
         telemetry["fallback_reason"] = "no_reply"
