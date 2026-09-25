@@ -294,12 +294,16 @@ class TestAgentLoop:
         assert out["message"] == assistant.FALLBACK_MESSAGE
         assert out["meta"]["fallback_reason"] == "cap_exhausted"
 
-    def test_narration_double_fail_falls_back(self, db_session, configured,
-                                              monkeypatch):
+    def test_narration_double_fail_synthesizes_from_data(self, db_session,
+                                                         configured,
+                                                         monkeypatch):
         _seed_store(db_session)
         today = date.today().isoformat()
         # Two consecutive fabricated narrations: the first earns one
-        # self-correction round, the second hits the post-loop gate.
+        # self-correction round, the second hits the post-loop gate —
+        # but with a right-domain payload in hand, the deterministic
+        # synthesizer ships a correct answer built from the tool data
+        # instead of an apology.
         script = ScriptedChat([
             {"action": "tool", "tool": "get_sales_metrics",
              "args": {"start": today, "end": today}},
@@ -310,10 +314,57 @@ class TestAgentLoop:
         ])
         monkeypatch.setattr(llm, "chat_decide", script)
         out = assistant.handle_message(db_session, 1, "How's today?")
-        # Text-only: the message is replaced by the honest fallback.
+        # Seeded today: 300 + 200 revenue, 90 + 60 profit, 2 orders.
+        assert out["message"] == (
+            "Your store took 500.0 in revenue across 2 orders "
+            "(profit 150.0) for the period you asked about.")
+        assert out["meta"]["fallback_reason"] == "synthesized"
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_narration_double_fail_no_synth_falls_back(self, db_session,
+                                                       configured,
+                                                       monkeypatch):
+        """Unclassifiable question (domain None) + a payload the
+        synthesizer has no template for (top products without a product
+        question): the honest narration fallback still ships."""
+        _seed_store(db_session)
+        today = date.today().isoformat()
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_top_products",
+             "args": {"start": today, "end": today, "metric": "profit"}},
+            {"action": "final",
+             "message": "Revenue was 999999.0 today, a record!"},
+            {"action": "final",
+             "message": "Revenue was 12345.0, unbelievable!"},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(db_session, 1, "zzz")
         assert out["message"] == assistant.NARRATION_FALLBACK
         assert out["meta"]["fallback_reason"] == "narration_double_fail"
-        assert out["meta"]["shipped_grounded"] is True  # fallback is clean
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_synth_employee_answer(self, db_session, configured,
+                                   monkeypatch):
+        """Employee question + double narration fail: the synthesizer
+        builds the ranking answer from the employee payload."""
+        _seed_store(db_session)
+        today = date.today().isoformat()
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_employee_performance",
+             "args": {"start": today, "end": today}},
+            {"action": "final",
+             "message": "Rahim sold 999999.0 today!"},
+            {"action": "final",
+             "message": "Karim sold 12345.0!"},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(db_session, 1,
+                                       "Who is the worst performing employee?")
+        # Seeded today: Rahim 300/90, Karim 200/60.
+        assert "Rahim leads your staff with 300.0 in revenue" in out["message"]
+        assert "Karim trails at 200.0" in out["message"]
+        assert out["meta"]["fallback_reason"] == "synthesized"
+        assert out["meta"]["shipped_grounded"] is True
 
     def test_narration_self_correction_recovers(self, db_session, configured,
                                                 monkeypatch):
