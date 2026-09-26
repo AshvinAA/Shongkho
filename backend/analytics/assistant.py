@@ -89,6 +89,13 @@ _NOT_A_REQUEST_RE = re.compile(
     r"\b(think|guess|opinion|was|were|had|has been|thanks|thank you|"
     r"great|nice|good job)\b", re.I)
 
+# Live-found 3B failure: the model copies the prompt EXAMPLES' argument
+# PLACEHOLDERS ("start": "<today>") into real tool calls. Repair the
+# known literals deterministically instead of burning a ValueError
+# round on them.
+_DATE_LITERALS = {"<today>": 0, "<yesterday>": 1,
+                  "<week ago>": 7, "<month ago>": 30}
+
 # ---- question-domain classification (relevance gating) ----
 # Live-found failure: "Who is the worst performing employee?" -> llama
 # fetched PRODUCTS and answered with a product's revenue. Every number
@@ -264,6 +271,44 @@ def _auto_tool_for(db, owner_id: int, message: str, domain: str | None = None):
     return ("get_sales_metrics", {"start": today, "end": today})
 
 
+def _sanitize_tool_args(db, owner_id: int, tool: str, args: dict,
+                        user_message: str) -> dict:
+    """
+    Deterministic arg repair for two live-found 3B copying failures:
+
+    - date placeholders copied from the prompt examples ("start":
+      "<today>", "<week ago>") become real ISO dates — a ValueError
+      round spent teaching date formats is a wasted round;
+    - an employee_name that appears NOWHERE in the user's message or
+      recent conversation is an example-name copy ("How much has Rahim
+      sold today?" in the prompt made the model scope every employee
+      fetch to Rahim or Karim) — dropping it widens the fetch to the
+      whole staff, which is what an unnamed question needs. A name the
+      user actually typed (this turn or a recent one) is kept.
+
+    store_id/owner_id stay server-injected; nothing else is trusted.
+    """
+    import models
+    args = dict(args or {})
+    today = date.today()
+    for key in ("start", "end"):
+        raw = str(args.get(key, "")).strip().lower()
+        if raw in _DATE_LITERALS:
+            args[key] = (today
+                         - timedelta(days=_DATE_LITERALS[raw])).isoformat()
+    if tool == "get_employee_performance" and args.get("employee_name"):
+        needle = str(args["employee_name"]).strip().lower()
+        if needle:
+            hay = (user_message or "").lower()
+            for turn in _window_projection(db, owner_id):
+                hay += " " + (turn.get("message") or "").lower()
+            if needle not in hay:
+                print(f"[assistant] dropped example-copied employee_name "
+                      f"{args['employee_name']!r} — not in the conversation")
+                args.pop("employee_name", None)
+    return args
+
+
 def _question_domain(db, owner_id: int, message: str) -> str | None:
     """
     'employee' | 'product' | None — which data domain the question is
@@ -405,14 +450,24 @@ def _synth_answer(user_message: str, domain: str | None,
                  if not e.get("is_owner")]
         if lanes:
             top, trail = lanes[0], lanes[-1]
+            if top["name"] == trail["name"]:
+                # Single-lane payload (live turn 36: the fetch was
+                # scoped to one person, or only one employee sold in
+                # range) — "X leads … X trails" is nonsense. Answer
+                # the question with the one honest data point.
+                return (f"{top['name']} is the only member of your staff "
+                        f"with sales in this period: {top['revenue']} in "
+                        f"revenue across {top['orders']} orders (profit "
+                        f"{top['profit']}). There is no gap to compare "
+                        "against yet — check the dashboard's employee "
+                        "race for the full picture.")
             return (f"{top['name']} leads your staff with "
                     f"{top['revenue']} in revenue across "
                     f"{top['orders']} orders (profit {top['profit']}). "
                     f"{trail['name']} trails at {trail['revenue']} "
                     f"({trail['orders']} orders)."
                     + (" That gap is worth a conversation before it "
-                       "becomes a trend — coach, don't cut."
-                       if top['name'] != trail['name'] else ""))
+                       "becomes a trend — coach, don't cut."))
     prod = next((r for r in reversed(accumulated)
                  if isinstance(r, dict) and r.get("tool")
                  == "get_top_products"), None)
@@ -539,11 +594,18 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                 telemetry["grounded_first_pass"] = False
                 telemetry["fallback_reason"] = "refuse_after_data"
                 break
-            # Refusal on a CLASSIFIED store question is a misfire too
-            # (live-found: wrong tool -> ValueError -> give up and
-            # refuse). The loop knows what data the question needs:
-            # rescue-fetch it instead of shipping the refusal.
-            if domain and not telemetry["auto_fetch"] \
+            # Refusal on a CLASSIFIED store question is ALWAYS a
+            # misfire (live-found, twice: wrong-tool ValueError -> give
+            # up and refuse; and placeholder-copied args). The loop
+            # knows what data the question needs and the user cannot
+            # rephrase their way out of a data answer: FETCH-FIRST.
+            # Not conditional on "the model already refused once" —
+            # waiting for a refusal wastes a full 30-90s round before
+            # the rescue even starts. Unclassified questions keep the
+            # clean-refusal path (a chatbot that cannot say "I don't
+            # know" is a refuse-bot).
+            if domain in ("employee", "product") \
+                    and not telemetry["auto_fetch"] \
                     and _round < TOOL_CALL_CAP - 1:
                 narration_retried = True
                 telemetry["narration_retried"] = True
@@ -677,7 +739,9 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
 
         # action == "tool"
         name = decision["tool"]
-        args = decision.get("args") or {}
+        args = _sanitize_tool_args(db, owner_id, name,
+                                   decision.get("args") or {},
+                                   user_message)
         executed.append({"tool": name, "args": args})
         try:
             payload = tools.execute(db, owner_id, name, args)
@@ -706,6 +770,27 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     if refused:
         # Already sanitized in the loop (numbers -> fixed refusal text).
         pass
+    elif domain in ("employee", "product") and not accumulated \
+            and not telemetry["auto_fetch"]:
+        # FETCH-FIRST FLOOR (live turn 38): a classified data question
+        # shipped a final/refuse with NO fetch at all, and the gates
+        # passed vacuously — no data behind it means nothing false was
+        # claimed, and number-free prose passes the gates by design.
+        # A data question without data is a failure regardless of how
+        # clean the prose is: fetch the question's own tool now.
+        # (Equivalent to the refuse-branch rescue, but for "final"
+        # decisions — the model never even tried.)
+        auto = _auto_tool_for(db, owner_id, user_message, domain)
+        if auto and _auto_fetch(db, owner_id, auto[0], auto[1],
+                                executed, observations, accumulated,
+                                telemetry, context):
+            synth = _synth_answer(user_message or "", domain, accumulated)
+            if synth is not None:
+                reply = synth
+                telemetry["fallback_reason"] = "synthesized"
+            else:
+                reply = NARRATION_FALLBACK
+                telemetry["fallback_reason"] = "narration_double_fail"
     elif not _gates_pass(reply or "", accumulated, domain):
         # Covers every failure shape: fabricated numbers WITH tool
         # data, a digits-in-prose chit-chat reply with NO data behind

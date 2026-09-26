@@ -418,6 +418,117 @@ class TestAgentLoop:
         assert out["meta"]["specificity_retried"] is True
         assert out["meta"]["shipped_grounded"] is True
 
+    def test_example_copied_name_is_dropped_and_fetch_rescues(self, db_session,
+                                                              configured,
+                                                              monkeypatch):
+        """Live turn 34+36: the model copies an example NAME into the
+        employee fetch ("Rahim"), narrowing the payload to one person.
+        The sanitizer drops the never-mentioned name; the refused first
+        decision earns the always-on refuse-rescue fetch; the whole-
+        staff payload answers the question."""
+        _seed_store(db_session)
+        script = ScriptedChat([
+            {"action": "refuse", "message": "I can't answer that."},
+            {"action": "final", "message": "ok"},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(
+            db_session, 1, "Which employee is performing the worst?")
+        # employee_name dropped ("rahim" appears nowhere), rescue fired.
+        assert out["tool_calls"][0]["args"] == {
+            "start": date.today().isoformat(), "end": date.today().isoformat()}
+        assert out["meta"]["auto_fetch"] is True
+
+    def test_worst_performer_question_gets_full_staff_fetch(self, db_session,
+                                                            configured,
+                                                            monkeypatch):
+        """Live turn 36 regression: worst-performer questions must fetch
+        the WHOLE staff. The model scoped the fetch to an example-copied
+        name; the sanitizer widens it back."""
+        _seed_store(db_session)
+        today = date.today().isoformat()
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_employee_performance",
+             "args": {"start": today, "end": today,
+                      "employee_name": "Karim"}},
+            {"action": "final", "message": "Karim trails — coach them."},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(
+            db_session, 1, "Which employee is performing the worst?")
+        args = out["tool_calls"][0]["args"]
+        # "Karim" appears nowhere in the question -> dropped -> the
+        # fetch covers the whole staff.
+        assert "employee_name" not in args
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_placeholder_dates_repaired_not_refused(self, db_session,
+                                                    configured,
+                                                    monkeypatch):
+        """Live turn 34: the model copies the prompt's "<today>"/"<week
+        ago>" placeholders into tool args. Repaired deterministically —
+        no ValueError round burned teaching date formats."""
+        _seed_store(db_session)
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_sales_metrics",
+             "args": {"start": "<today>", "end": "<today>"}},
+            {"action": "final", "message": "Revenue was 500.0 today."},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(db_session, 1, "How's today?")
+        assert out["tool_calls"][0]["args"]["start"] == date.today().isoformat()
+        assert out["meta"]["tool_errors"] == []
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_no_fetch_on_classified_question_is_rescued(self, db_session,
+                                                         configured,
+                                                         monkeypatch):
+        """Live turn 38: a classified data question shipped a final with
+        NO fetch — gates passed vacuously (no data = nothing false).
+        The fetch-first floor catches it."""
+        _seed_store(db_session)
+        script = ScriptedChat([
+            {"action": "final", "message": "Push more of the best-selling "
+                                           "product, the"},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(
+            db_session, 1, "Which product should we market more?")
+        assert out["tool_calls"][0]["tool"] == "get_top_products"
+        assert "Mustard Oil 1L is your top product" in out["message"]
+        assert out["meta"]["fallback_reason"] == "synthesized"
+        assert out["meta"]["auto_fetch"] is True
+        assert out["meta"]["shipped_grounded"] is True
+
+    def test_single_lane_synth_is_not_leads_and_trails(self, db_session,
+                                                       configured,
+                                                       monkeypatch):
+        """Live turn 36: a one-person payload made the ranking template
+        say "X leads … X trails". A scoped (but user-named) fetch is
+        legal, so the template must answer honestly instead."""
+        _seed_store(db_session)
+        today = date.today().isoformat()
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_employee_performance",
+             "args": {"start": today, "end": today,
+                      "employee_name": "Karim"}},
+            {"action": "final",
+             "message": "The gap is significant — watch it before it "
+                        "becomes a trend."},
+            {"action": "final",
+             "message": "Someone is trailing the team — coach them."},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        # "Karim" IS in the question: the scoped fetch is kept, giving
+        # a genuine single-lane payload.
+        out = assistant.handle_message(
+            db_session, 1, "Should I let Karim go?")
+        msg = out["message"]
+        assert "is the only member of your staff with sales" in msg
+        assert "trails at" not in msg
+        assert out["meta"]["fallback_reason"] == "synthesized"
+        assert out["meta"]["shipped_grounded"] is True
+
     def test_domain_classifier_intent_phrasings(self, db_session):
         """Advice-intent phrasings carry no explicit employee noun —
         the intent word IS the signal (live gap Claude-flagged)."""
