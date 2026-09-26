@@ -317,7 +317,7 @@ class TestAgentLoop:
         # Seeded today: 300 + 200 revenue, 90 + 60 profit, 2 orders.
         assert out["message"] == (
             "Your store took 500.0 in revenue across 2 orders "
-            "(profit 150.0) for the period you asked about.")
+            "(profit 150.0) today.")
         assert out["meta"]["fallback_reason"] == "synthesized"
         assert out["meta"]["shipped_grounded"] is True
 

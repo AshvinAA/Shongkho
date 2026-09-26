@@ -604,6 +604,41 @@ at any depth":
    num_predict build (uvicorn without --reload-dir). After the fixes,
    the same question shape that produced turn 38 deterministically
    produces a named, grounded product push.
+16. **Self-review battery + the voice-level hardening round.** A new
+   `backend/basic_questions_battery.py` runs 16 basic owner questions
+   against the real provider and applies deterministic per-answer
+   verdicts (routing, echo, entity-naming, refusal discipline) so the
+   agent can iterate WITHOUT user feedback. It drove the following
+   fixes, all live-verified over ~20 turns ending 16/16 PASS:
+   - **`sales` domain.** "How are we doing on sales today?" was
+     unclassifiable (echo shipped through the vacuous gates). Employee-
+     name matches now outrank sales hints ("How much has Rahim SOLD
+     today?" stays employee); `get_sales_metrics` joined the gates,
+     auto-tool map, refuse-rescue and fetch-first floor.
+   - **Echo detector** (`_ECHO_PHRASE_RE`): the prompt's own example
+     prose must never ship as an answer; detected post-loop and
+     replaced with fetched data or the honest fallback
+     (`meta.echo_detected`).
+   - **Conversation/prediction/world-knowledge deterministic shields.**
+     `_CONVERSATION_ASK_RE` (incl. "what do you (really) know") ships
+     the warm number-free line whatever the model narrated;
+     `_PREDICTION_RE` ships the designed redirect; world-knowledge
+     phrasings ship the fixed refusal (live: "weather" -> the model
+     FETCHED sales totals as its answer).
+   - **Synthesizer discipline.** Domain-gated (a product question is
+     never answered with store totals), conversation-guarded ("how are
+     you" is never synthesized — turn 48's "0 revenue across 0
+     orders"), zero-sales/empty-lane branches answer the empty state
+     instead of apologizing, and multi-part asks (sales + employees)
+     get an enrichment fetch so one answer covers both halves. Range
+     labels carry no calendar dates ("today"/"over that period" — a
+     date in prose is a fabricated-number verdict waiting to happen).
+   - **Post-loop wrong-domain rescue:** gates-fail + wrong tool ->
+     fetch the question's own tool, then synthesize (live q9).
+   Known residual (prose quality, not grounding): the 3B sometimes
+   misattributes real numbers in narration (store totals phrased as a
+   product's numbers, odd advice angles) — deterministic judges catch
+   shape, not attribution; a hosted model fixes the voice.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-

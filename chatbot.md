@@ -197,10 +197,11 @@ deterministically. In order, from cheapest to most drastic:
    construction. `fallback_reason: "synthesized"`. (The specificity
    gate is what routes vague answers here: the ranking template names
    exactly the entities the model refused to name.)
-5. **Honest fallbacks.** Nothing synthetic fits, or there is no data
-   (the fetch-first floor closes the last hole: a classified question
-   that ships with NO fetch at all — gates pass vacuously when
-   nothing was claimed — gets its tool called and synthesized from):
+5. **Honest fallbacks + deterministic shields.** Nothing synthetic
+   fits, or there is no data (the fetch-first floor closes the last
+   hole: a classified question that ships with NO fetch at all —
+   gates pass vacuously when nothing was claimed — gets its tool
+   called and synthesized from):
    - data was fetched → `NARRATION_FALLBACK` ("I pulled your store
      data but couldn't phrase the answer reliably — the dashboard
      charts have the numbers…");
@@ -329,12 +330,23 @@ python eval_assistant.py --only employee_perf smalltalk --quick
 text-only envelope (exactly `{message, tool_calls, meta}`, no
 ui_blocks key), `shipped_grounded`, and an advice-voice probe.
 
+```bash
+# self-review: 16 basic questions, per-answer verdicts (batch <=4)
+LLM_PROVIDER=ollama LLM_MODEL=llama3.2 LLM_BUDGET_SECONDS=150 \
+    python basic_questions_battery.py --only q1,q2,q3,q4
+```
+
 **Live results trajectory (llama3.2 3B, CPU-only):**
 
 - `fabricated_number_leakage = 0` across **every** run — the
   guardrail invariant never broke, through every prompt iteration.
 - Employee questions: ~50% fallback run-to-run → **0% fallback** after
   the relevance gate + auto-fetch + synthesis landed.
+- Basic-question battery: after the §11.16 hardening round (sales
+  domain, echo detector, conversation/prediction/world-knowledge
+  shields, synth discipline), **16/16 basic owner questions pass**
+  deterministic verdicts live — no echoes, no wrong refusals, no
+  fabricated numbers across ~20 live turns.
 - `most_sold` answers correctly with real advice ("Push more of
   Sugar 1kg… highest units sold"); capabilities/smalltalk answered
   conversationally; `refusal_precision` hit 100% on the out-of-scope
@@ -385,7 +397,8 @@ text-only assistant panel and API client.
 | `backend/live_chat_battery.py` | Text-only contract battery (live provider) |
 | `frontend/src/components/assistant/AssistantPanel.jsx` | Text-only chat panel (messages only) |
 | `frontend/src/api/assistant.js` | Envelope client |
-| `docs/LLM_INTEGRATION.md` | Authoritative spec; §11 items 8–13 are this doc's source of record |
+| `backend/basic_questions_battery.py` | 16-question live battery with per-answer verdicts (self-review tool) |
+| `docs/LLM_INTEGRATION.md` | Authoritative spec; §11 items 8–16 are this doc's source of record |
 
 ## 13. The model ceiling — and why the architecture compensates
 
