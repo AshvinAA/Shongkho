@@ -3,17 +3,22 @@ Demo data seeder — populates a realistic store so the Analytics page
 (month / week / day views, employee race, top products) has proper data
 to chew on.
 
-Creates (idempotent — safe to run twice):
+Creates (idempotent — safe to run twice; --force wipes and reseeds):
   Owner   : Edwin Zaman          login phone: "edwinzaman"  pw: shongkho123
-  Staff   : Rahim, Karim, Sumi, Tanvir (employees of Edwin)
-  Products: 12 grocery items with photos
-  Sales   : ~4 months of transactions ending TODAY, with:
+  Staff   : 7 employees of Edwin — Rahim, Karim, Sumi, Tanvir,
+            Nusrat, Jahangir, Mim (skill spread -> a real race with
+            a clear leader, a mid-pack and trainees; Sumi slumps this
+            week; Mim is AWAY the last 3 days)
+  Products: 24 grocery items — clear best-sellers, seasonal swings
+            (cold/energy drinks up in summer, chocolate in winter),
+            slow movers, and Ghee 500g as DEAD STOCK (no sales in the
+            last 14 days, 500 units on the shelf)
+  Sales   : ~8 months of transactions ending TODAY, with:
             - weekday/weekend pattern (weekends busier)
             - lunch (12-14h) + evening (18-21h) peaks
-            - per-employee skill/personality so the race is interesting
             - a month-over-month upward trend (revenue grows)
-            - one employee with a slump this week (visible in deltas)
-            - seasonal product swings (cold drinks up, winter items down)
+            - TODAY is boosted ~30% so chatbot testing on "today"
+              questions always has real data to answer with
 
 Run it:
     cd backend
@@ -51,6 +56,9 @@ EMPLOYEES = [
     {"name": "Karim Ahmed",  "phone": "01711111102", "position": "Salesperson",        "salary": 14000, "skill": 0.75, "base": 9},
     {"name": "Sumi Akter",   "phone": "01711111103", "position": "Salesperson",        "salary": 13000, "skill": 0.60, "base": 7},
     {"name": "Tanvir Hasan", "phone": "01711111104", "position": "Trainee",            "salary": 9000,  "skill": 0.40, "base": 5},
+    {"name": "Nusrat Jahan", "phone": "01711111105", "position": "Senior Salesperson", "salary": 17000, "skill": 0.85, "base": 11},
+    {"name": "Jahangir Alam", "phone": "01711111106", "position": "Salesperson",       "salary": 12000, "skill": 0.55, "base": 6},
+    {"name": "Mim Rahman",   "phone": "01711111107", "position": "Trainee",            "salary": 8500,  "skill": 0.35, "base": 4},
 ]
 
 # ---------------------------------------------------------------
@@ -70,6 +78,20 @@ PRODUCTS = [
     {"name": "Biscuits (family)",   "cost": 55,  "retail": 80,  "category": "Snacks",    "pop": 0.85, "peak": None},
     {"name": "Soap Bar",            "cost": 35,  "retail": 55,  "category": "Care",      "pop": 0.7, "peak": None},
     {"name": "Shampoo Sachet x12",  "cost": 90,  "retail": 130, "category": "Care",      "pop": 0.65, "peak": None},
+    # --- second shelf: more spread for top-product rankings ---
+    {"name": "Soybean Oil 5L",      "cost": 720, "retail": 890, "category": "Cooking",   "pop": 0.88, "peak": None},
+    {"name": "Milk Powder 500g",    "cost": 260, "retail": 330, "category": "Staples",   "pop": 0.78, "peak": None},
+    {"name": "Ghee 500g",           "cost": 480, "retail": 620, "category": "Cooking",   "pop": 0.15, "peak": None,
+     "quiet_days": 14},   # DEAD STOCK: nothing sells in the last 14 days
+    {"name": "Rolled Oats 400g",    "cost": 130, "retail": 175, "category": "Staples",   "pop": 0.50, "peak": None},
+    {"name": "Turmeric Powder 200g","cost": 45,  "retail": 70,  "category": "Cooking",   "pop": 0.66, "peak": None},
+    {"name": "Chili Powder 200g",   "cost": 60,  "retail": 90,  "category": "Cooking",   "pop": 0.70, "peak": None},
+    {"name": "Coriander Seeds 100g","cost": 35,  "retail": 55,  "category": "Cooking",   "pop": 0.30, "peak": None},
+    {"name": "Puffed Rice 500g",    "cost": 40,  "retail": 60,  "category": "Snacks",    "pop": 0.60, "peak": None},
+    {"name": "Chanachur 350g",      "cost": 55,  "retail": 85,  "category": "Snacks",    "pop": 0.72, "peak": None},
+    {"name": "Chocolate Bar",       "cost": 30,  "retail": 50,  "category": "Snacks",    "pop": 0.68, "peak": 12},  # peaks Dec-Feb
+    {"name": "Energy Drink 250ml",  "cost": 55,  "retail": 85,  "category": "Beverages", "pop": 0.75, "peak": 4},   # peaks Apr-Aug
+    {"name": "Mineral Water 1L",    "cost": 12,  "retail": 20,  "category": "Beverages", "pop": 0.90, "peak": None},
 ]
 
 # SVG avatars: tiny data-URIs with distinct bg colors + initials,
@@ -140,7 +162,8 @@ def seed(force: bool = False) -> None:
         print("Wiping existing demo data (--force)...")
         # children first
         for model in (models.SaleItem, models.Sale, models.AnalyticsSnapshot,
-                      models.AnalysisRun, models.ChatMessage):
+                      models.AnalysisRun, models.ChatMessage,
+                      models.AssistantMessage):  # stale chat history too
             db.query(model).delete()
         db.query(models.Product).delete()
         db.query(models.Customer).delete()
@@ -208,10 +231,10 @@ def seed(force: bool = False) -> None:
     customers.append(walkin)
 
     # -----------------------------------------------------------
-    # Sales: ~4 months ending today
+    # Sales: ~8 months ending today
     # -----------------------------------------------------------
     today = date.today()
-    start = today - timedelta(days=118)          # ~4 months of history
+    start = today - timedelta(days=239)          # ~8 months of history
     days = (today - start).days
     month_ratio = 1.0                            # month-over-month growth factor
 
@@ -224,12 +247,19 @@ def seed(force: bool = False) -> None:
 
         # Month-over-month growth: from ~0.75x to ~1.25x across the window.
         month_ratio = 0.75 + 0.5 * progress
-        day_scale = (1.35 if weekend else 1.0) * month_ratio
+        # TODAY gets a ~30% boost: chatbot questions about "today" must
+        # always have real data to answer with, whatever the hour.
+        day_scale = (1.35 if weekend else 1.0) * month_ratio \
+            * (1.3 if d == today else 1.0)
 
         for emp, spec in staff:
             # Everyone works most days; trainee misses more days.
             attendance = 0.95 if spec["skill"] > 0.5 else 0.8
             if rng.random() > attendance:
+                continue
+            # Mim is AWAY the last 3 days (an attendance gap the
+            # employee race and the chatbot can point at).
+            if spec["name"].startswith("Mim") and (today - d).days < 3:
                 continue
 
             # Sumi's slump: this week she sells far below her baseline.
@@ -259,6 +289,11 @@ def seed(force: bool = False) -> None:
                     qty = 1
                     if pspec["pop"] > 0.8 and rng.random() < 0.5:
                         qty = rng.randint(2, 5)  # staples sell in multiples
+                    # Dead stock: nothing sells in the last N days —
+                    # the chatbot should flag it as a slow mover.
+                    if pspec.get("quiet_days") \
+                            and (today - d).days < pspec["quiet_days"]:
+                        continue
                     # Seasonal swing: hot months favor cold drinks etc.
                     seasonal = 1.0
                     if pspec["peak"] is not None:
@@ -297,6 +332,12 @@ def seed(force: bool = False) -> None:
     print(f"Sales created: {made} across {days} days "
           f"({start.isoformat()} -> {today.isoformat()})")
     print("Done. Log in as edwinzaman / shongkho123 and open Analytics.")
+    print("Chatbot test questions this data answers well:")
+    print("  - Who is selling the most today? / this week?")
+    print("  - Which product should we push more this week?")
+    print("  - How is Sumi doing lately? (visible slump)")
+    print("  - Is Ghee 500g selling at all? (dead stock, no sales in 14d)")
+    print("  - How did we do today? / this week? / this month?")
     db.close()
 
 
