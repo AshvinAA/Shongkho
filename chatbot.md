@@ -171,17 +171,23 @@ deterministically. In order, from cheapest to most drastic:
    `REFUSAL_AFTER_DATA_FALLBACK` (the model's own refusal text was
    observed echoing the corrective error verbatim — untrustworthy).
 3. **Auto-fetch rescue (`_auto_tool_for` + `_auto_fetch`).** When the
-   model WILL NOT call the tool for a data question (no matter how
-   the retry is worded) the loop fetches the obvious tool ITSELF:
-   employee keyword or a literal employee name →
-   `get_employee_performance` (scoped to that name when present);
-   product domain → `get_top_products(metric=revenue, limit=5)`;
-   otherwise `get_sales_metrics` — args always complete, gated by
-   `_AUTO_TOOL_HINT_RE` (question-word + time-word, minus
-   statement/opinion phrasings via `_NOT_A_REQUEST_RE`). Exactly one
-   auto-fetch per turn (`meta.auto_fetch`), cap-bounded. Fires on a
-   no-data narration double-fail AND on a refusal of a classified
-   question (the wrong-domain rescue path).
+   model WILL NOT call the tool for a data question — or refuses one
+   — the loop fetches the obvious tool ITSELF: employee keyword or a
+   literal employee name → `get_employee_performance` (scoped to that
+   name only when the user typed it); product domain →
+   `get_top_products(metric=revenue, limit=5)`; otherwise
+   `get_sales_metrics` — args always complete. Exactly one auto-fetch
+   per turn (`meta.auto_fetch`), cap-bounded. Fires on a no-data
+   narration double-fail AND immediately on any refusal of a
+   classified question (fetch-first — waiting for a second refusal
+   wastes a full 30–90s round).
+
+   Every model-supplied tool call passes through `_sanitize_tool_args`
+   first: date placeholders copied from the prompt examples
+   ("\<today\>", "\<week ago\>") become real ISO dates, and an
+   employee_name that appears nowhere in the conversation is dropped
+   (an example-name copy narrows the payload to one person — exactly
+   what happened live).
 4. **Deterministic synthesis (`_synth_answer`).** If the model still
    cannot narrate real, right-domain data — or twice answered a
    classified question with vague, entity-free prose — the loop builds
@@ -191,7 +197,10 @@ deterministically. In order, from cheapest to most drastic:
    construction. `fallback_reason: "synthesized"`. (The specificity
    gate is what routes vague answers here: the ranking template names
    exactly the entities the model refused to name.)
-5. **Honest fallbacks.** Nothing synthetic fits, or there is no data:
+5. **Honest fallbacks.** Nothing synthetic fits, or there is no data
+   (the fetch-first floor closes the last hole: a classified question
+   that ships with NO fetch at all — gates pass vacuously when
+   nothing was claimed — gets its tool called and synthesized from):
    - data was fetched → `NARRATION_FALLBACK` ("I pulled your store
      data but couldn't phrase the answer reliably — the dashboard
      charts have the numbers…");
@@ -334,7 +343,13 @@ ui_blocks key), `shipped_grounded`, and an advice-voice probe.
 - Residual 3B limits: multi-part `employee_vs_product` still
   oscillates between a perfect answer and an honest fallback
   run-to-run; latency p50 ~30–60s, p95 up to ~190s on CPU; occasional
-  `cap_exhaustion` / `tool_arg_error`.
+  `cap_exhaustion` / `tool_arg_error`. One live session also exposed
+  (and drove fixes for) example-content copying: placeholder dates
+  ("\<today\>") and example names ("Rahim") pasted into real tool
+  calls, byte-identical echoed answers on unrelated questions, and a
+  one-person "leads … trails" synthesis — see
+  `docs/LLM_INTEGRATION.md` §11 item 15 for the turn-by-turn
+  forensics.
 
 ## 11. Tests
 

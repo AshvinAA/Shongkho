@@ -551,6 +551,59 @@ at any depth":
    approximation). Vague-answer risk remains on unclassified (domain
    None) questions by design — gating every conversational reply for
    named entities would turn the advisor back into a refuse-bot.
+15. **Live-turn forensics: four failure shapes from one session, and
+   the fixes.** The persisted assistant_messages table makes every
+   live failure auditable (`tool_calls` args + message + telemetry).
+   One real session (sqlite turn ids 31–38) showed four shapes the
+   previous ladder missed:
+   a) **Example-copied placeholders in tool args** — the model issued
+      `get_employee_performance(start="<today>", end="<today>",
+      employee_name="Rahim")` for "which is my worst performing
+      employee": the prompt's own placeholder text and example name
+      copied verbatim into a real call. The date ValueError then ate
+      the remaining rounds. Fix: `_sanitize_tool_args` repairs the
+      known date literals ("<today>", "<week ago>", …) to real ISO
+      dates and DROPS an employee_name that appears nowhere in the
+      user's message or recent conversation (an example-name copy
+      narrows the payload to one person; dropping it widens the fetch
+      to the whole staff, which is what an unnamed question needs). A
+      name the user actually typed is kept — scoped fetches stay
+      legal.
+   b) **Refuse on a classified question** shipped the refusal (the
+      old rescue waited for a SECOND refusal). Fix: the refuse-branch
+      rescue is now FETCH-FIRST — any refusal on an employee/product-
+      classified question auto-fetches immediately (misfire
+      forensics: wrong-tool ValueErrors and placeholder-copied args
+      both end in refusals; waiting wastes a full 30–90s round).
+      Unclassified questions keep the clean-refusal path — a chatbot
+      that can never say "I don't know" is a refuse-bot.
+   c) **Final with NO fetch on a classified question** (the user's
+      reported turn: "which product should we be marketing more" →
+      an answer that named no product and called no tool). The gates
+      passed VACUOUSLY: no data fetched means no numbers were claimed,
+      and number-free prose passes by design. Fix: a fetch-first
+      floor in the post-loop gate — a classified question that ships
+      without any fetch gets its tool called and the deterministic
+      synthesizer answers from the payload (synthesis has no
+      single-lane hazard here: auto-fetch args never carry a name).
+      This adopts (for classified questions only) the "force the tool
+      call" suggestion earlier rejected in item 14 — the live session
+      proved vague-answer risk extends past the specificity gate.
+   d) **Single-lane synthesis nonsense** — with a one-person employee
+      payload (scoped by an example-copied name), the ranking template
+      produced "Karim Ahmed leads your staff with 25335.0 … Karim
+      Ahmed trails at 25335.0". Fix: when the lanes collapse to one
+      person, the template says so honestly ("X is the only member of
+      your staff with sales in this period… no gap to compare
+      against yet") instead of leading-and-trailing the same name.
+   Session-level observations: the model's answers can be
+   BYTE-IDENTICAL across unrelated questions (turns 32 and 38) when
+   it echoes example text — no per-question gate can fix echo; only
+   data-in-hand can. The mid-sentence cut in the reported message is
+   also consistent with the server still running the pre-1100
+   num_predict build (uvicorn without --reload-dir). After the fixes,
+   the same question shape that produced turn 38 deterministically
+   produces a named, grounded product push.
 
 Known limitation (prose quality, not grounding): a 3B model occasionally
 flips a direction word ("fell" for a rise) while the number is verbatim-
