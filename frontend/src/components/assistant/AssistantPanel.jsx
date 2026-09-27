@@ -8,6 +8,13 @@ const SUGGESTIONS = [
   'Which product should we push more this week?',
 ]
 
+// Bangla suggestion chips — shown when the switch forces বাংলা (plan §5).
+const SUGGESTIONS_BN = [
+  'এই সপ্তাহে কোন পণ্য বেশি চাপ দেওয়া উচিত?',
+  'আজ কে সবচেয়ে ভালো বিক্রি করেছে?',
+  'লাভ বাড়াতে কী করব?',
+]
+
 /**
  * Conversational business assistant (Part B) — TEXT-ONLY by design.
  *
@@ -15,18 +22,23 @@ const SUGGESTIONS = [
  * answers with grounded advice, arguments and alternatives in prose.
  * Charts live on the dashboard above; the chat never renders graphs.
  *
- * Each turn POSTs /analytics/chat; history reloads on mount so the
- * conversation survives refreshes (persistence in assistant_messages).
- * Error contract is honest: 429 (daily cap) and 503 (not configured)
- * surface as system notes; the input re-enables either way.
+ * Each turn POSTs /analytics/chat with the current language mode
+ * (plan §1: 'auto' mirrors the message, 'bn' forces Bangla); history
+ * reloads on mount so the conversation survives refreshes (persistence
+ * in assistant_messages). Error contract is honest: 429 (daily cap)
+ * and 503 (not configured) surface as system notes; the input
+ * re-enables either way.
  */
-export default function AssistantPanel() {
+export default function AssistantPanel({ language = 'auto' } = {}) {
   const { user } = useAuth()
   const [history, setHistory] = useState([])   // [{role, message}]
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const scrollRef = useRef(null)
+
+  const forceBn = language === 'bn'
+  const suggestions = forceBn ? SUGGESTIONS_BN : SUGGESTIONS
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => {
@@ -56,7 +68,7 @@ export default function AssistantPanel() {
     setBusy(true)
     scrollToEnd()
     try {
-      const out = await sendChat(message)
+      const out = await sendChat(message, language)
       setHistory((h) => [...h, { role: 'assistant', message: out.message }])
     } catch (e) {
       setNote(
@@ -83,7 +95,7 @@ export default function AssistantPanel() {
               risky.
             </p>
             <div className="assistant-suggestions">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button key={s} type="button" className="btn btn-outline"
                         disabled={busy} onClick={() => send(s)}>
                   {s}

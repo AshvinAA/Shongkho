@@ -4,9 +4,13 @@
  * SegmentedControl — the day/week/month + revenue/profit switcher.
  * DeltaChip        — the "+12.5% vs last week" indicator (green/red/neutral).
  */
-export function SegmentedControl({ options, value, onChange, disabled = false }) {
+export function SegmentedControl({ options, value, onChange, disabled = false, ariaLabel }) {
   return (
-    <div className={`segmented${disabled ? ' segmented-disabled' : ''}`} role="tablist">
+    <div
+      className={`segmented${disabled ? ' segmented-disabled' : ''}`}
+      role="tablist"
+      aria-label={ariaLabel}
+    >
       {options.map((opt) => (
         <button
           key={opt.value}

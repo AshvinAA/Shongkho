@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getDashboard, getRunStatus, startRun } from '../api/analytics.js'
+import { updateMyPreferences } from '../api/auth.js'
 import { SegmentedControl } from '../components/analytics/common.jsx'
 import AssistantPanel from '../components/assistant/AssistantPanel.jsx'
 
@@ -8,6 +9,15 @@ const PERIOD_OPTIONS = [
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
+]
+
+// Protik's language mode (docs/PROTIK_BANGLA_PLAN.md §1/§5):
+// auto = mirror the owner's language; bn = force Bangla everywhere;
+// en = plain English. Persisted per owner via PUT /auth/me/preferences.
+const LANG_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'bn', label: 'বাংলা' },
+  { value: 'en', label: 'EN' },
 ]
 
 const POLL_MS = 1500
@@ -30,6 +40,9 @@ export default function Protik() {
   const isOwner = user?.role === 'owner'
 
   const [period, setPeriod] = useState('week')
+  // The switch's initial value is the owner's persisted preference
+  // (hydrated by /auth/me); changing it refetches AND persists.
+  const [lang, setLang] = useState(user?.assistant_language || 'auto')
   const [insights, setInsights] = useState(null)
   const [generatedAt, setGeneratedAt] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -38,10 +51,10 @@ export default function Protik() {
   const [run, setRun] = useState(null)
   const pollRef = useRef(null)
 
-  const loadDashboard = useCallback(async (p = period, quiet = false) => {
+  const loadDashboard = useCallback(async (p = period, quiet = false, l = lang) => {
     if (!quiet) setLoading(true)
     try {
-      const data = await getDashboard(p)
+      const data = await getDashboard(p, l)
       setInsights(data.sections?.insights || null)
       setGeneratedAt(data.generated_at)
       setError(null)
@@ -50,13 +63,22 @@ export default function Protik() {
     } finally {
       setLoading(false)
     }
-  }, [period])
+  }, [period, lang])
 
   useEffect(() => {
     if (isOwner) loadDashboard(period)
   }, [isOwner, period, loadDashboard])
 
   useEffect(() => () => clearInterval(pollRef.current), [])
+
+  // Flip the switch: refetch the commentary in the chosen language and
+  // persist the choice (fire-and-forget — the UI never waits on it).
+  function changeLang(mode) {
+    setLang(mode)
+    Promise.resolve(
+      updateMyPreferences({ assistantLanguage: mode }),
+    ).catch(() => {})  // persistence is best-effort; the session choice stands
+  }
 
   function pollRun(runId) {
     clearInterval(pollRef.current)
@@ -115,6 +137,12 @@ export default function Protik() {
         </div>
         <div className="protik-controls">
           <SegmentedControl
+            options={LANG_OPTIONS}
+            value={lang}
+            onChange={changeLang}
+            ariaLabel="Protik language"
+          />
+          <SegmentedControl
             options={PERIOD_OPTIONS}
             value={period}
             onChange={(p) => setPeriod(p)}
@@ -128,14 +156,14 @@ export default function Protik() {
       {error && <div className="alert alert-error" role="alert">{error}</div>}
 
       {/* ---- Hero: the generative analysis, in huge type ---- */}
-      <section className="protik-hero" aria-live="polite">
+      <section className="protik-hero" aria-live="polite" lang={lang === 'bn' ? 'bn' : undefined}>
         {loading ? (
           <div className="page-loading" role="status">
             <div className="spinner" />
             <p className="muted">Protik is reading your numbers…</p>
           </div>
         ) : (
-          <InsightsHero insights={insights} period={period} generatedAt={generatedAt} />
+          <InsightsHero insights={insights} period={period} generatedAt={generatedAt} forceBn={lang === 'bn'} />
         )}
         {running && (
           <p className="protik-refreshing muted">Protik is crunching a fresh analysis…</p>
@@ -144,7 +172,7 @@ export default function Protik() {
 
       {/* ---- The chat, beside/under the hero ---- */}
       <section className="protik-chat-section">
-        <AssistantPanel />
+        <AssistantPanel language={lang} />
       </section>
     </div>
   )
@@ -153,17 +181,43 @@ export default function Protik() {
 /**
  * The hero statement. Success = huge summary + supporting observations.
  * Degraded/pending/empty get honest, quieter states — never fake prose.
+ * `forceBn` (বাংলা switch): the hero's own chrome (empty/degraded/stamp
+ * lines) speaks Bangla too. An English snapshot served while no Bangla
+ * cache exists yet carries `missing_language: 'bn'` — labeled honestly,
+ * never faked.
  */
-function InsightsHero({ insights, period, generatedAt }) {
+function InsightsHero({ insights, period, generatedAt, forceBn = false }) {
+  const t = forceBn ? {
+    empty: "একটা বিশ্লেষণ চালান, আমি আপনার দোকানের সংকেতগুলো বলে দেব।",
+    emptyHint: `এই ${period === 'day' ? 'দিনের' : period === 'month' ? 'মাসের' : 'সপ্তাহের'} বিশ্লেষণ নেই — উপরে ⚡ Run analysis চাপুন।`,
+    degraded: (p) => `এই ${p} নির্ভরযোগ্য মন্তব্য লিখতে পারিনি — Analytics ট্যাবের চার্টগুলোই আসল উৎস।`,
+    reason: "কারণ",
+    steady: "আপনার দোকান স্থির — এই সংখ্যাগুলোতে কোনো নাটক নেই।",
+    watch: "👀 নজরে: ",
+    stamp: (d) => `তৈরি হয়েছে ${d} · নিচে প্রতীককে যেকোনো প্রশ্ন করুন`,
+    englishOnly: "বাংলা সংস্করণ এখনো তৈরি হয়নি — চাইলে একটা নতুন বিশ্লেষণ চালান।",
+  } : {
+    empty: "Run an analysis and I'll tell you what your store is trying to say.",
+    emptyHint: null,
+    degraded: null,
+    reason: null,
+    steady: null,
+    watch: null,
+    stamp: null,
+    englishOnly: null,
+  }
+
   if (!insights) {
     return (
       <div className="protik-hero-inner">
-        <p className="protik-hero-summary">
-          Run an analysis and I'll tell you what your store is trying to say.
-        </p>
-        <p className="muted">
-          No analysis for this {period} yet — hit <strong>⚡ Run analysis</strong> above.
-        </p>
+        <p className="protik-hero-summary">{t.empty}</p>
+        {t.emptyHint ? (
+          <p className="muted">{t.emptyHint}</p>
+        ) : (
+          <p className="muted">
+            No analysis for this {period} yet — hit <strong>⚡ Run analysis</strong> above.
+          </p>
+        )}
       </div>
     )
   }
@@ -178,12 +232,13 @@ function InsightsHero({ insights, period, generatedAt }) {
     return (
       <div className="protik-hero-inner">
         <p className="protik-hero-summary">
-          I couldn't write a reliable commentary for this {period} — your charts
-          on the Analytics tab remain the source of truth.
+          {t.degraded
+            ? t.degraded(period)
+            : `I couldn't write a reliable commentary for this ${period} — your charts on the Analytics tab remain the source of truth.`}
         </p>
         {insights.degraded_reason && (
           <p className="card-sub muted" title={insights.degraded_reason}>
-            Reason: {insights.degraded_reason}
+            {t.reason ? `${t.reason}: ` : 'Reason: '}{insights.degraded_reason}
           </p>
         )}
       </div>
@@ -198,7 +253,13 @@ function InsightsHero({ insights, period, generatedAt }) {
       {insights.summary ? (
         <p className="protik-hero-summary">{insights.summary}</p>
       ) : (
-        <p className="protik-hero-summary">Your store is steady — no drama in these numbers.</p>
+        <p className="protik-hero-summary">
+          {t.steady || "Your store is steady — no drama in these numbers."}
+        </p>
+      )}
+
+      {forceBn && insights.missing_language === 'bn' && (
+        <p className="protik-hero-lang-note muted">{t.englishOnly}</p>
       )}
 
       {observations.length > 0 && (
@@ -210,12 +271,14 @@ function InsightsHero({ insights, period, generatedAt }) {
       )}
       {watch.length > 0 && (
         <p className="protik-hero-watch muted">
-          👀 Watching: {watch.join(' · ')}
+          {t.watch ? `${t.watch}${watch.join(' · ')}` : `👀 Watching: ${watch.join(' · ')}`}
         </p>
       )}
       {generatedAt && (
         <p className="protik-hero-stamp muted">
-          Generated {new Date(generatedAt).toLocaleString()} · ask Protik anything below
+          {t.stamp
+            ? t.stamp(new Date(generatedAt).toLocaleString())
+            : <>Generated {new Date(generatedAt).toLocaleString()} · ask Protik anything below</>}
         </p>
       )}
     </div>

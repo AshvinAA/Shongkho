@@ -83,6 +83,9 @@ def _period(period: str) -> str:
     return period
 
 
+
+
+
 # ---------------------------------------------------------
 # POST /analytics/run — trigger the pipeline
 # ---------------------------------------------------------
@@ -157,6 +160,7 @@ def run_status(
 @router.get("/dashboard", response_model=schemas.AnalyticsDashboardResponse)
 def dashboard(
     period: str = Query(default="week"),
+    language: str = Query(default=None),
     current_user=Depends(deps.require_owner),
     db: Session = Depends(get_db),
 ):
@@ -165,9 +169,25 @@ def dashboard(
 
     The frontend switches day/week/month by refetching this endpoint —
     snapshots are frozen per run, so a switch is one indexed lookup.
+
+    `language` (plan §4): 'bn' serves the Bangla commentary snapshot
+    ('insights_bn' section, written when the owner's persisted mode is
+    Bangla) when one exists; without one, the English snapshot is
+    served as-is with an honest `missing_language` marker — no live
+    LLM call, no half-finished rerun.
     """
     period = _period(period)
     sections = pipeline.latest_snapshots(db, current_user["id"], period)
+
+    if language == "bn" and sections.get("insights"):
+        bn = sections.get("insights_bn")
+        if bn:
+            sections["insights"] = dict(bn, language="bn")
+        else:
+            sections["insights"] = dict(
+                sections["insights"], language="en", missing_language="bn")
+    # Internal storage key — never leaks to the API surface.
+    sections.pop("insights_bn", None)
 
     generated_at = None
     if sections:
@@ -208,7 +228,8 @@ def assistant_chat(
     """
     try:
         return assistant.handle_message(db, current_user["id"],
-                                        payload.message)
+                                        payload.message,
+                                        language=payload.language)
     except assistant.AssistantUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except assistant.DailyCapReached as exc:
