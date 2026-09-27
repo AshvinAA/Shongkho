@@ -22,7 +22,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import database
 import deps
-from routes import analytics, auth, chat, customers, employees, products, sales
+from routes import analytics, auth, chat, customers, employees, products, sales, staff
 
 STATIC_DIR = os.path.join(deps.BASE_DIR, "static")
 
@@ -117,6 +117,7 @@ app.include_router(sales.router, prefix=API_PREFIX)
 app.include_router(sales.sales_router, prefix=API_PREFIX)
 app.include_router(chat.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
+app.include_router(staff.router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------

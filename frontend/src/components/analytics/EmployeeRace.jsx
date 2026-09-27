@@ -163,6 +163,13 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
                 <Avatar user={{ name: e.name, photo: e.photo }} size="sm" />
                 <strong>{e.name}</strong>
                 <span className="muted">{e.orders} order{e.orders === 1 ? '' : 's'}</span>
+                {/* Final standings show BOTH figures — the bar chart above
+                    switches with the metric toggle, these never hide. */}
+                <span className="race-standing-figures">
+                  <span>Rev <strong>{fmtMoney(e.revenue)}</strong></span>
+                  <span className="muted">·</span>
+                  <span>Profit <strong>{fmtMoney(e.profit)}</strong></span>
+                </span>
                 <DeltaChip value={e.change_pct?.[metric]} label={`vs last ${data.period}`} />
               </li>
             ))}

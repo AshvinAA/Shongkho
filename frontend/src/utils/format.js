@@ -12,6 +12,17 @@ export function fmtDate(value) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+/** ISO datetime -> "Sep 27, 2026, 2:23 PM" (falls back to the raw string). */
+export function fmtDateTime(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+}
+
 /** "14:23:45" -> "2:23 PM" (falls back to the raw string). */
 export function fmtTime(value) {
   if (!value) return '—'
