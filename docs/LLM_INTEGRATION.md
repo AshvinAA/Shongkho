@@ -690,3 +690,38 @@ Switched dev to Gemini per the plan above. Live findings, all fixed:
 Verified: backend suite 243 passing (incl. 4 new enum regressions),
 battery 16/16 on `gemini-3.5-flash-lite`. Free-tier rate-limit message
 now says limits vary per model instead of hardcoding 20/min.
+
+### 18. Full eval baseline on Gemini + 429 smoothing (2026-09-27)
+
+Eval baseline (13 scenarios, `--gap 8`, gemini-3.5-flash-lite):
+grounding 100%, fabricated_number_leakage 0, tool_selection 100%,
+tool_arg_error_rate 0, cap_exhaustion 0, refusal_precision 100%,
+over_refusal 0 — the core contract holds on Gemini untouched. Three
+findings, all addressed:
+
+ 1. **429 smoothing.** `ChatDecisionError` now carries
+    `rate_limit_wait_s` (Google's retry hint from `retry_after_s`).
+    The agent loop sleeps out a SHORT window (≤
+    `RATE_LIMIT_MAX_WAIT_S`) and retries the same round once
+    (`meta.rate_limit_waited`); longer windows degrade immediately —
+    same economics as `generate_json`'s intra-request handling, now at
+    decision granularity. Live-verified behavior paths; no 429
+    occurred in paced runs (pacing keeps the harness honest — the
+    smoothing covers a user's burst, not a mis-paced harness).
+ 2. **Prediction redirect outranks refuse-after-data** (eval: the
+    model FETCHED data for "how much will we sell next month", then
+    refused — the generic apology shipped instead of the designed
+    redirect). Post-loop order is now prediction-shield first; the
+    redirect ships whatever the loop did. Regression-tested.
+ 3. **Example-copy guard in the chat prompt**: "the phrasing in these
+    examples is off-limits for answers" added to Q1 (Gemini verbatim-
+    copied the capabilities example; the echo shield caught it, but
+    the retry is only useful if the model knows copying is the crime).
+
+Post-fix eval deltas: conversation_answered 50% → 100% (capabilities
+answers in its own words), prediction ships the redirect, no
+regressions elsewhere (a new `sales_today` fallback in run 2 was a
+timeout burst eating the 30s budget — budget-ceiling behavior working
+as designed, not a 429; suite 247 green incl. 4 new regressions:
+short-429 wait+retry, long-429 immediate degrade, single-wait-per-turn,
+prediction-redirect priority).
