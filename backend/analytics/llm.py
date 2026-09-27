@@ -273,7 +273,8 @@ class _GeminiClient:
                 self.retry_after_s = wait_s
                 wait = f" Try again in ~{wait_s:.0f}s." if wait_s else ""
                 self.last_error = (
-                    "Gemini rate limit reached (free tier: 20 requests/min)." + wait
+                    "Gemini free-tier rate limit reached for this model "
+                    "(limits vary per model, e.g. flash-lite 15/min)." + wait
                 )
             else:
                 self.last_error = f"HTTP {exc.code}: {_google_message(detail) or exc.reason}"
@@ -616,7 +617,8 @@ Output ONLY the JSON object.
 """
 
 
-def chat_decide(context: dict, tools_summary: str, *, client=None) -> dict:
+def chat_decide(context: dict, tools_summary: str, *, client=None,
+                allowed_tools: list[str] | None = None) -> dict:
     """
     One agent-loop decision round-trip (doc §3.4).
 
@@ -624,12 +626,20 @@ def chat_decide(context: dict, tools_summary: str, *, client=None) -> dict:
     projection (roles + tool names, NEVER payloads), the tools summary,
     and accumulated tool results for this turn.
 
+    `allowed_tools` is the closed registry tool-name list. When given,
+    the response schema enums-constrains action/tool/metric — a remote
+    model (Gemini's responseSchema, unlike Ollama's grammar-constrained
+    decoding) then CANNOT emit a hallucinated tool name like
+    "get_top_products_fixed_call_...", which the loop would otherwise
+    burn counted rounds rejecting.
+
     Returns the decision dict ({action: final|tool|refuse, ...}).
     Raises ChatDecisionError on transport/format failures so the caller
     can fall back deterministically.
     """
     if client is None:
         client = _make_client()
+    decision_schema = _decision_schema_for(allowed_tools)
 
     prompt = (
         f"TOOLS:\n{tools_summary}\n\n"
@@ -645,7 +655,7 @@ def chat_decide(context: dict, tools_summary: str, *, client=None) -> dict:
         if remaining < 0.5:
             break
         raw = client.generate_json(
-            prompt, _DECISION_SCHEMA,
+            prompt, decision_schema,
             timeout_s=min(remaining, getattr(client, "attempt_timeout_cap", 30.0)),
             system=CHAT_SYSTEM_PROMPT,
             # Chat needs phrasing variety; Part A's 0.1 made llama copy
@@ -701,3 +711,21 @@ _DECISION_SCHEMA = {
     },
     "required": ["action"],
 }
+
+
+def _decision_schema_for(allowed_tools: list[str] | None) -> dict:
+    """
+    The decision schema, enum-tightened when the caller passes the
+    closed tool registry. String enums are honored by BOTH back ends:
+    Ollama's grammar-constrained decoding and Gemini's responseSchema.
+    The base `_DECISION_SCHEMA` stays loose so injectable test clients
+    and the no-registry path are unaffected.
+    """
+    if not allowed_tools:
+        return _DECISION_SCHEMA
+    schema = json.loads(json.dumps(_DECISION_SCHEMA))  # deep copy
+    props = schema["properties"]
+    props["action"]["enum"] = ["final", "tool", "refuse"]
+    props["tool"]["enum"] = sorted(allowed_tools)
+    props["args"]["properties"]["metric"]["enum"] = ["revenue", "profit", "units"]
+    return schema

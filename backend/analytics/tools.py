@@ -37,13 +37,25 @@ def _parse_date(value, name: str) -> date:
         return value.date()
     if isinstance(value, date):
         return value
+    if value is None or (isinstance(value, str) and not value.strip()):
+        # Missing-arg error text is a corrective prompt, not a log line:
+        # say exactly what to repeat and where the date comes from.
+        raise ValueError(
+            f"The '{name}' argument is MISSING. Repeat the call with 'start' "
+            f"and 'end' as 'YYYY-MM-DD' strings — take them from the user's "
+            f"question (e.g. 'today' means the context's 'today' field)."
+        )
     if not isinstance(value, str):
-        raise ValueError(f"{name} must be a 'YYYY-MM-DD' string")
+        raise ValueError(
+            f"{name} must be a 'YYYY-MM-DD' string, got {type(value).__name__}. "
+            f"Repeat the call with {name} as an ISO 'YYYY-MM-DD' string."
+        )
     try:
         return datetime.strptime(value.strip(), DATE_FORMAT).date()
     except ValueError:
         raise ValueError(
-            f"{name} is not a valid date: got {value!r}, expected 'YYYY-MM-DD'"
+            f"{name} is not a valid date: got {value!r}. Repeat the call with "
+            f"{name} as an ISO 'YYYY-MM-DD' string (YYYY-MM-DD, zero-padded)."
         ) from None
 
 

@@ -284,11 +284,21 @@ mid-sentence — "…the best-selling product, the").
 | `TOOL_CALL_CAP` | 5 rounds | assistant.py |
 | Chat temperature | 0.2 | llm.py `chat_decide` |
 | `num_predict` | 1100 (Ollama), `num_ctx` 8192 | Ollama client |
-| `LLM_BUDGET_SECONDS` | 90 in `.env` (live evals want 150; CPU-only Ollama takes 10–190s per call) | backend/.env |
-| Provider | `LLM_PROVIDER=ollama`, `LLM_MODEL=llama3.2`, `OLLAMA_URL=http://localhost:11434` | backend/.env |
+| `LLM_BUDGET_SECONDS` | 30 (Gemini); was 90 on Ollama (CPU-only inference takes 10–190s per call) | backend/.env |
+| Provider | `LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `LLM_MODEL=gemini-3.5-flash-lite` (dev switched 2026-09-27; free-tier limits are per model — flash-lite 15/min, flash tiers 5/min) | backend/.env |
+
+Dev currently runs on Gemini; the Ollama row of history remains
+one env edit away (`LLM_PROVIDER=ollama`, `LLM_MODEL=llama3.2`) — the
+pipeline is provider-agnostic (`generate_json` / `chat_decide`
+contract, schema-forced output both ways). Two provider-neutral
+tightenings shipped with the switch (§17 of docs/LLM_INTEGRATION.md):
+schema enums on `action`/`tool`/`metric` (Gemini's responseSchema
+otherwise free-texts tool names), and date-arg inference in
+`_sanitize_tool_args` (the optional-args schema otherwise lets Gemini
+emit `args: {}` and burn rounds on ValueErrors).
 
 Switching to Gemini is an env change only — `LLM_PROVIDER=gemini`,
-`GEMINI_API_KEY=…`, `LLM_MODEL=gemini-2.5-flash` — no code changes;
+`GEMINI_API_KEY=…`, `LLM_MODEL=gemini-3.5-flash-lite` — no code changes;
 the whole pipeline is provider-agnostic (`generate_json` /
 `chat_decide` contract, schema-forced output both ways).
 
@@ -420,3 +430,10 @@ flips a direction word ("fell" for a rise) while the number itself is
 verbatim-correct. The checker passes it — the number traces to real
 data; the verb is decoration. Hosted models follow direction
 instructions far more reliably.
+
+**Gemini verified (2026-09-27):** the thesis holds live. On
+`gemini-3.5-flash-lite` the battery went 16/16 with genuine model
+prose (named entities, verbatim numbers, one concrete action per
+point, honest about zero-sale days) and the rescue ladder fired on
+only 2 of 16 questions. The guardrails are quiet precisely because
+the model is good — and still standing if the model is not.

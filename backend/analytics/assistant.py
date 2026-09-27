@@ -387,6 +387,53 @@ def _sanitize_tool_args(db, owner_id: int, tool: str, args: dict,
         if raw in _DATE_LITERALS:
             args[key] = (today
                          - timedelta(days=_DATE_LITERALS[raw])).isoformat()
+
+    # Gemini-observed: the decision schema marks every arg optional, so
+    # the model omits dates entirely ("args": {}) and the tool
+    # ValueErrors. The question text itself determines the window —
+    # infer it deterministically instead of spending a counted round on
+    # a corrective retry the model ignores (live: five identical
+    # empty-args calls burned the whole cap in one turn).
+    low = (user_message or "").lower()
+    # Literal ISO dates in the question outrank keyword inference:
+    # "total sales between 2026-09-21 and 2026-09-27" is explicit —
+    # no guessing (live q15: the keyword fallback answered "today"
+    # for a stated 7-day range).
+    explicit = []
+    for raw in re.findall(r"\b\d{4}-\d{2}-\d{2}\b", low):
+        try:
+            explicit.append(date.fromisoformat(raw))
+        except ValueError:
+            pass  # shape-valid but not a real date (e.g. 2026-02-30)
+    if len(explicit) >= 2:
+        window = (min(explicit[:2]), max(explicit[:2]))
+    elif len(explicit) == 1:
+        window = (explicit[0], explicit[0])
+    elif "yesterday" in low:
+        window = (today - timedelta(days=1), today - timedelta(days=1))
+    elif "last week" in low:
+        this_monday = today - timedelta(days=today.weekday())
+        window = (this_monday - timedelta(days=7),
+                  this_monday - timedelta(days=1))
+    elif "week" in low:
+        window = (today - timedelta(days=6), today)
+    elif "last month" in low:
+        first_this = today.replace(day=1)
+        prev_first = (first_this - timedelta(days=1)).replace(day=1)
+        window = (prev_first, first_this - timedelta(days=1))
+    elif "month" in low:
+        window = (today.replace(day=1), today)
+    else:
+        window = (today, today)
+    filled = False
+    for key, day in (("start", window[0]), ("end", window[1])):
+        if not str(args.get(key) or "").strip():
+            args[key] = day.isoformat()
+            filled = True
+    if filled:
+        print("[assistant] filled missing date args from the question: "
+              f"start={args.get('start')} end={args.get('end')}")
+
     if tool == "get_employee_performance" and args.get("employee_name"):
         needle = str(args["employee_name"]).strip().lower()
         if needle:
@@ -734,7 +781,9 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         telemetry["context_bytes"].append(
             len(llm.dumps(context)) + len(tools_summary))
         try:
-            decision = llm.chat_decide(context, tools_summary)
+            decision = llm.chat_decide(
+                context, tools_summary,
+                allowed_tools=sorted(tools.REGISTRY))
         except llm.ChatDecisionError as exc:
             # Provider down / budget gone / unparseable: degrade honestly
             # (doc: never a 500 for LLM failures).
