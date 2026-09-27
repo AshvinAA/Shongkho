@@ -18,6 +18,7 @@ import Staff from './pages/Staff.jsx'
 import Chat from './pages/Chat.jsx'
 import Profile from './pages/Profile.jsx'
 import Analytics from './pages/Analytics.jsx'
+import Protik from './pages/Protik.jsx'
 import './styles.css'
 
 const router = createBrowserRouter([
@@ -56,6 +57,14 @@ const router = createBrowserRouter([
         element: (
           <RoleGate allowedRoles={['owner']} fallback={<p className="muted">Owners only.</p>}>
             <Analytics />
+          </RoleGate>
+        ),
+      },
+      {
+        path: 'protik',
+        element: (
+          <RoleGate allowedRoles={['owner']} fallback={<p className="muted">Protik is for owners.</p>}>
+            <Protik />
           </RoleGate>
         ),
       },

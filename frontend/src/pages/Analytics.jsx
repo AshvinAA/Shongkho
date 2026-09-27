@@ -192,7 +192,7 @@ export default function Analytics() {
               <InsightsCard data={sections.insights} />
             ) : (
               <EmptySection
-                title="Business insights"
+                title="Protik's analysis"
                 body="AI-generated commentary on this period appears after your first run."
               />
             )}

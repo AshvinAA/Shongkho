@@ -225,7 +225,7 @@ describe('Analytics page — insights card (Part A)', () => {
     })
     renderAnalytics()
 
-    expect(await screen.findByText('Business insights')).toBeInTheDocument()
+    expect(await screen.findByText("Protik's analysis")).toBeInTheDocument()
     expect(screen.getByText(/Revenue was ৳14,200 this week/)).toBeInTheDocument()
     expect(screen.getByText('Revenue rose 12.7% week over week.')).toBeInTheDocument()
     expect(screen.getByText('Karim declined 12.5% on revenue.')).toBeInTheDocument()
@@ -240,7 +240,7 @@ describe('Analytics page — insights card (Part A)', () => {
     })
     renderAnalytics()
 
-    expect(await screen.findByText('Business insights')).toBeInTheDocument()
+    expect(await screen.findByText("Protik's analysis")).toBeInTheDocument()
     expect(screen.getByText(/Automated commentary is unavailable/)).toBeInTheDocument()
     expect(screen.getByText(/Reason: LLM budget exceeded/)).toBeInTheDocument()
     // Sales section still renders — degradation never hides the data.

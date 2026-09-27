@@ -17,7 +17,7 @@ export default function InsightsCard({ data }) {
   if (data.pending) {
     return (
       <div className="analytics-panel">
-        <h3 className="card-title">Business insights</h3>
+        <h3 className="card-title">Protik's analysis</h3>
         <p className="muted">{data.pending}</p>
       </div>
     )
@@ -28,7 +28,7 @@ export default function InsightsCard({ data }) {
   if (data.degraded) {
     return (
       <div className="analytics-panel">
-        <h3 className="card-title">Business insights</h3>
+        <h3 className="card-title">Protik's analysis</h3>
         <p className="muted">
           Automated commentary is unavailable for this run — your charts
           below are still up to date.
@@ -47,7 +47,7 @@ export default function InsightsCard({ data }) {
 
   return (
     <div className="analytics-panel">
-      <h3 className="card-title">Business insights</h3>
+      <h3 className="card-title">Protik's analysis</h3>
 
       {data.summary && <p className="insights-summary">{data.summary}</p>}
 

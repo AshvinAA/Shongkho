@@ -101,12 +101,12 @@ export default function AssistantPanel() {
         {history.map((turn, i) => (
           <div key={i} className={`assistant-turn assistant-${turn.role}`}>
             <span className="assistant-who muted">
-              {turn.role === 'user' ? (user?.name || 'You') : 'Assistant'}
+              {turn.role === 'user' ? (user?.name || 'You') : 'Protik প্রতীক'}
             </span>
             <p className="assistant-msg">{turn.message}</p>
           </div>
         ))}
-        {busy && <p className="muted assistant-typing">Assistant is thinking…</p>}
+        {busy && <p className="muted assistant-typing">Protik is thinking…</p>}
         {note && <div className="alert alert-error">{note}</div>}
       </div>
 
@@ -116,7 +116,7 @@ export default function AssistantPanel() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask for advice — pricing, staffing, what to push…"
           disabled={busy}
-          aria-label="Message the analytics assistant"
+          aria-label="Message Protik"
         />
         <button type="submit" className="btn" disabled={busy || !input.trim()}>
           {busy ? '…' : 'Send'}

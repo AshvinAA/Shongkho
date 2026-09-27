@@ -35,6 +35,9 @@ export default function Navbar() {
           </NavLink>
         ))}
         <RoleGate allowedRoles={['owner']}>
+          <NavLink to="/protik" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Protik প্রতীক
+          </NavLink>
           <NavLink to="/staff" className={({ isActive }) => (isActive ? 'active' : '')}>
             Staff
           </NavLink>
