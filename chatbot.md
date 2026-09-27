@@ -25,6 +25,11 @@ Two product decisions shape everything downstream:
    envelope is `{message, tool_calls, meta}`. The DB column for
    ui_blocks remains (NULL) for migration safety; the frontend panel
    renders messages only.
+1. **Bilingual by birth (Bangla / Banglish / English).** The owner
+   writes in any mix of Bangla script, romanized Banglish, and
+   English; Protik answers in the same language — or, with the
+   owner's switch on বাংলা, in Bangla regardless of input
+   (see §14; design in `docs/PROTIK_BANGLA_PLAN.md`).
 2. **Advisor persona, not an analyst.** Every data answer follows an
    implicit ANSWER / WHY / HOW / ALTERNATIVE shape: recommendation
    first, the 2–3 numbers that justify it, concrete actions for the
@@ -78,24 +83,30 @@ One turn, start to finish:
    Daily cap check (`DAILY_CAP = 20` assistant messages/day/store)
    → `DailyCapReached` (429).
 2. Persist the user turn.
-3. Classify the question's **data domain** once (`_question_domain`):
-   `employee` / `product` / `None` — from keywords plus this store's
-   literal employee names ("How is Rahim doing?" has no keyword; the
-   name IS the signal). Product hints override employee hints
-   ("best-selling product"). Used by the relevance gate and the
-   wrong-domain rescue.
-4. Build the context: `{today, conversation: window projection,
-   tool_results: []}` — the `tool_results` key starts as an explicit
-   **empty cue**, because a 3B model treats an absent key as "nothing
-   to do" and answers from memory.
-5. Loop, bounded at `TOOL_CALL_CAP = 5` rounds. Each round:
+3. Resolve the **language mode** (`auto | bn | en`): the request's
+   `language` field wins, else the owner's persisted
+   `owners.assistant_language`, else `auto`. Detect the message
+   language (`llm.detect_language`, Bengali-unicode ratio).
+4. Classify the question's **data domain** once (`_question_domain`):
+   `employee` / `product` / `None` — from keywords (English, Bangla
+   and Banglish) plus this store's literal employee names ("How is
+   Rahim doing?" has no keyword; the name IS the signal). Product
+   hints override employee hints ("best-selling product"). Used by
+   the relevance gate and the wrong-domain rescue.
+5. Build the context: `{today, conversation: window projection,
+   tool_results: [], force_language, message_language}` — the
+   `tool_results` key starts as an explicit **empty cue**, because a
+   3B model treats an absent key as "nothing to do" and answers from
+   memory; `force_language` is what the prompt's LANGUAGE rule reads.
+6. Loop, bounded at `TOOL_CALL_CAP = 5` rounds. Each round:
    `llm.chat_decide(...)` returns exactly one JSON decision —
    `tool` (fetch), `final` (answer), or `refuse`. Tool results and
    error observations accumulate into `context.tool_results`.
    Tool ValueErrors go back as observations (one counted corrective
    retry). The loop **never raises** for LLM/tool failures — those
    degrade to honest fallbacks, never a 500.
-6. Post-loop **narration gate** + rescue ladder (§6), telemetry
+7. Post-loop **narration gate** + rescue ladder (§6), Bengali-numeral
+   transliteration + (under `bn`) Bangla fallback swap, telemetry
    stamped, assistant turn persisted, envelope returned:
    `{message, tool_calls, meta}`.
 
@@ -301,6 +312,7 @@ mid-sentence — "…the best-selling product, the").
 | `num_predict` | 1100 (Ollama), `num_ctx` 8192 | Ollama client |
 | `LLM_BUDGET_SECONDS` | 30 (Gemini); was 90 on Ollama (CPU-only inference takes 10–190s per call) | backend/.env |
 | Provider | `LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `LLM_MODEL=gemini-3.5-flash-lite` (dev switched 2026-09-27; free-tier limits are per model — flash-lite 15/min, flash tiers 5/min) | backend/.env |
+| Language mode | `owners.assistant_language` = `auto \| bn \| en` (owner-persisted); per-turn override via the chat request's `language` field — `PUT /auth/me/preferences` | models.py, routes/auth.py, routes/analytics.py |
 
 Dev currently runs on Gemini; the Ollama row of history remains
 one env edit away (`LLM_PROVIDER=ollama`, `LLM_MODEL=llama3.2`) — the
@@ -356,9 +368,11 @@ text-only envelope (exactly `{message, tool_calls, meta}`, no
 ui_blocks key), `shipped_grounded`, and an advice-voice probe.
 
 ```bash
-# self-review: 16 basic questions, per-answer verdicts (batch <=4)
-LLM_PROVIDER=ollama LLM_MODEL=llama3.2 LLM_BUDGET_SECONDS=150 \
-    python basic_questions_battery.py --only q1,q2,q3,q4
+# self-review: 22 basic questions (EN + BN/Banglish), per-answer verdicts
+# and per-language eval gates; --gap keeps free-tier RPM honest, --lang
+# pins a default mode for cases without their own
+PYTHONUTF8=1 python basic_questions_battery.py --gap 8
+PYTHONUTF8=1 python basic_questions_battery.py --gap 8 --only q17,q18,q19,q20,q21,q22
 ```
 
 **Live results trajectory (llama3.2 3B, CPU-only):**
@@ -386,18 +400,20 @@ LLM_PROVIDER=ollama LLM_MODEL=llama3.2 LLM_BUDGET_SECONDS=150 \
   calls, byte-identical echoed answers on unrelated questions, and a
   one-person "leads … trails" synthesis — see
   `docs/LLM_INTEGRATION.md` §11 item 15 for the turn-by-turn
-  forensics.
-
-## 11. Tests
+  forensics.## 11. Tests
 
 Backend suite (`cd backend && python -m pytest tests/ -p no:warnings -q`,
-231 passing) covers, chatbot-relevant:
+300 passing) covers, chatbot-relevant:
 
 - `tests/test_assistant.py` — loop behavior with fake decision
   clients: fetch-then-answer, narration retries per failure shape,
   refuse-after-fetch, wrong-domain rescue, auto-fetch, synthesis
   (employee ranking, sales totals), daily cap, scope isolation, window
   projection (payloads never in history).
+- `tests/test_language.py` — the language switch: preference
+  persistence, `bn` force (prompt directive + Bangla fallbacks),
+  Banglish shields, synth templates in Bangla, Bengali-numeral
+  normalization, dashboard `language=bn` cache + honest fallback.
 - `tests/test_eval.py` — harness aggregation, leakage detection,
   hermeticity.
 - `tests/test_insights.py` — Part A checker (the reality gate),
@@ -405,15 +421,16 @@ Backend suite (`cd backend && python -m pytest tests/ -p no:warnings -q`,
 - `tests/test_analytics.py` — tools, pipeline (incl. stale-run
   reaping), aggregators.
 
-Frontend (`cd frontend && npx vitest run`, 40 passing) covers the
-text-only assistant panel and API client.
+Frontend (`cd frontend && npx vitest run`, 41 passing) covers the
+text-only assistant panel, API client, and the Protik language switch
+(`ProtikLanguage.test.jsx`).
 
 ## 12. File map
 
 | File | Role |
 |---|---|
-| `backend/analytics/assistant.py` | Agent loop, rescue ladder, domain classification, relevance gate, synthesis, telemetry, caps, persistence |
-| `backend/analytics/llm.py` | Provider clients (Ollama/Gemini), `chat_decide`, `CHAT_SYSTEM_PROMPT`, `_DECISION_SCHEMA`, Part A `generate_json` |
+| `backend/analytics/assistant.py` | Agent loop, rescue ladder, domain classification (EN/BN/Banglish), relevance gate, synthesis (EN+BN templates), language resolution, Bangla fallbacks, numeral transliteration, telemetry, caps, persistence |
+| `backend/analytics/llm.py` | Provider clients (Ollama/Gemini), `chat_decide`, `CHAT_SYSTEM_PROMPT` (+ LANGUAGE rule), `_DECISION_SCHEMA`, `detect_language`, Part A `generate_json` |
 | `backend/analytics/tools.py` | Closed 3-tool registry, scope injection, model-facing ValueErrors |
 | `backend/analytics/insights.py` | Part A checker (`_check_text`, `_numbers_in`) — the reality gate; citation repair |
 | `backend/routes/analytics.py` | `POST /analytics/chat` (429/503 contract), `GET /analytics/chat/history` |
@@ -422,8 +439,9 @@ text-only assistant panel and API client.
 | `backend/live_chat_battery.py` | Text-only contract battery (live provider) |
 | `frontend/src/components/assistant/AssistantPanel.jsx` | Text-only chat panel (messages only) |
 | `frontend/src/api/assistant.js` | Envelope client |
-| `backend/basic_questions_battery.py` | 16-question live battery with per-answer verdicts (self-review tool) |
-| `docs/LLM_INTEGRATION.md` | Authoritative spec; §11 items 8–16 are this doc's source of record |
+| `backend/basic_questions_battery.py` | 22-question live battery (EN + BN/Banglish), per-answer verdicts, per-language eval gates, `--lang` (self-review tool) |
+| `docs/LLM_INTEGRATION.md` | Authoritative spec; §11 items 8–19 are this doc's source of record |
+| `docs/PROTIK_BANGLA_PLAN.md` | The Bangla/Banglish design — now fully implemented (§6 steps 1–5) |
 
 ## 13. The model ceiling — and why the architecture compensates
 
@@ -452,3 +470,55 @@ prose (named entities, verbatim numbers, one concrete action per
 point, honest about zero-sale days) and the rescue ladder fired on
 only 2 of 16 questions. The guardrails are quiet precisely because
 the model is good — and still standing if the model is not.
+
+## 14. The language switch — Bangla / Banglish / English (2026-09-28)
+
+Full implementation of `docs/PROTIK_BANGLA_PLAN.md` (spec:
+`docs/LLM_INTEGRATION.md` §19). The architectural bet, unchanged:
+**translate at the model, never in a layer** — an MT sandwich would
+compound grounding drift and sever the number-checker from the text
+the owner reads.
+
+**The mode.** `auto | bn | en`, persisted per owner
+(`owners.assistant_language`, `PUT /auth/me/preferences`) with a
+per-turn override on the chat request. `auto` mirrors the message
+language; `bn` forces Bangla even on English questions; `en` is the
+historical behavior. The context tells the model what to do
+(`force_language` + `message_language`); the system prompt's LANGUAGE
+rule enforces it.
+
+**What goes bilingual — and what does not.**
+
+| Layer | In `bn` mode |
+|---|---|
+| Model prose (chat answers) | Bangla, always |
+| Part A commentary | own `insights_bn` snapshot, served via `?language=bn` (honest `missing_language` fallback — no live re-billing) |
+| Deterministic fallbacks / refusals / redirects | Bangla pairs, swapped exact-match post-loop |
+| Synth templates (auto-fetch answers) | parallel Bangla tables, numbers verbatim |
+| Shields (conversation, prediction, world-knowledge, domain hints) | Bangla-script + Banglish triggers |
+| The checker & gates | UNCHANGED — Western digits (`\d` matches Bengali digits too) + original-script names are language-agnostic |
+| Receipts / POS | English (decided) |
+
+**Two live traps worth remembering:**
+
+1. **`\b` and Bengali.** Python `re` treats combining vowel signs
+   (ি ে ো) as non-word characters, so `\b` after a Bengali word ending
+   in one never matches. All Bangla-script regex alternatives use
+   Bengali-block lookarounds instead.
+2. **Bengali numerals ship anyway.** The model writes ১৩৫০ despite the
+   prompt rule. The gates catch it (`\d` matches Unicode decimals — no
+   vacuous pass), but good replies were replaced; every shipped reply
+   is now transliterated to Western digits (`_normalize_bn_numerals`)
+   before the shipped-grounded invariant.
+
+Also worth knowing: a Bangla prediction ("আগামী মাসে বিক্রি কত হবে?")
+classifies as a SALES question (the বিক্রি hint fires), so the
+fetch-first rescue must skip prediction-shaped asks — the redirect is
+the designed answer in any language.
+
+**Eval.** Battery: 22 cases (q17–q22 Bangla/Banglish), `--lang` flag,
+per-language eval gates in the summary, expected-language judge
+(Bengali-unicode presence; English-fallback leak fails under `bn`).
+Full run 22/22 PASS on `gemini-3.5-flash-lite`. The battery raises
+`DAILY_CAP` for its own scratch store — 22 questions outpace the
+product's 20/day cap.

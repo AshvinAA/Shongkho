@@ -201,7 +201,14 @@ def main():
     with tempfile.TemporaryDirectory(
             ignore_cleanup_errors=True) as tmp:
         db = _seed(tmp)
+        # The daily cap is a PRODUCT guard (20/day in the app), not an
+        # eval gate: a 22-question battery trips it and the tail cases
+        # die as DailyCapReached FAILs (live: q21/q22). Raise it for the
+        # battery's scratch store — real deployments keep the default.
+        assistant.DAILY_CAP = max(assistant.DAILY_CAP, len(cases) + 5)
         fails = warns = 0
+        # Per-language tallies — the plan §7 eval gates, one line each.
+        by_lang = {}
         for i, case in enumerate(cases):
             if args.gap > 0 and i > 0:
                 time.sleep(args.gap)
@@ -231,11 +238,26 @@ def main():
                 fails += 1
             elif reasons:
                 warns += 1
+            lang_key = case.get("lang") or args.lang or "auto"
+            tally = by_lang.setdefault(
+                lang_key, {"PASS": 0, "FAIL": 0, "warn": 0})
+            if status == "FAIL":
+                tally["FAIL"] += 1
+            elif reasons:
+                tally["warn"] += 1
+            else:
+                tally["PASS"] += 1
             tag = status if status == "PASS" else \
                 f"{status} ({'; '.join(reasons)})"
             print(f"    -> {tag}  [{elapsed:.0f}s]")
         print(f"\n===== {len(cases)} questions: "
               f"{fails} FAIL, {warns} warn =====")
+        if by_lang:
+            print("per-language eval gates (plan §7):")
+            for lang_key in sorted(by_lang):
+                t = by_lang[lang_key]
+                print(f"  {lang_key:>5}: {t['PASS']} PASS, "
+                      f"{t['FAIL']} FAIL, {t['warn']} warn")
         return 1 if fails else 0
 
 

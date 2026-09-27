@@ -104,4 +104,19 @@ describe('Protik language switch', () => {
       expect(assistantApi.sendChat).toHaveBeenCalledWith('hello', 'bn')
     })
   })
+
+  it('বাংলা mode relabels the whole panel chrome (plan §5 i18n)', async () => {
+    const user = userEvent.setup()
+    render(<Protik />)
+    await screen.findByText('Steady week.')
+
+    await user.click(screen.getByRole('tab', { name: 'বাংলা' }))
+
+    // Empty-state prose, suggestion chips and placeholder follow the switch.
+    expect(await screen.findByText(/দোকান নিয়ে জিজ্ঞেস করুন/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /এই সপ্তাহে কোন পণ্য/ })).toBeInTheDocument()
+    expect(await screen.findByPlaceholderText(/বাংলায় বা ইংরেজিতে/)).toBeInTheDocument()
+    // Period control relabels too.
+    expect(screen.getByRole('tab', { name: 'সপ্তাহ' })).toBeInTheDocument()
+  })
 })
