@@ -40,6 +40,24 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
   const forceBn = language === 'bn'
   const suggestions = forceBn ? SUGGESTIONS_BN : SUGGESTIONS
 
+  // UX strings follow the switch so the whole panel feels Bangla, not
+  // just the model output (docs/PROTIK_BANGLA_PLAN.md §3 i18n note).
+  const t = forceBn ? {
+    empty: 'দোকান নিয়ে জিজ্ঞেস করুন — আমি সংখ্যা তুলে এনে পরামর্শ, বিকল্প আর প্রয়োজনে সৎ আপত্তি দেব।',
+    grounded: 'আমি যেকোনো সংখ্যা সরাসরি আপনার দোকানের ডেটা থেকে বলি — কিছু বানাই না, আর ডেটা উত্তর না দিলে সৎভাবে বলি।',
+    thinking: 'প্রতীক ভাবছে…',
+    cap429: 'আজকের সব প্রশ্ন শেষ — কাউন্টার মধ্যরাত (UTC) এ রিসেট হবে।',
+    not503: 'এই সার্ভারে প্রতীক এখনো কনফিগার করা হয়নি।',
+    placeholder: 'বাংলায় বা ইংরেজিতে জিজ্ঞেস করুন…',
+  } : {
+    empty: "Ask me about your store — I'll pull the numbers and give you advice, alternatives, and honest pushback when a plan looks risky.",
+    grounded: "Every number I quote comes straight from your store data — I won't invent figures, and I'll say so when the data can't answer something.",
+    thinking: 'Protik is thinking…',
+    cap429: null,
+    not503: null,
+    placeholder: null,
+  }
+
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => {
       const el = scrollRef.current
@@ -73,9 +91,9 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
     } catch (e) {
       setNote(
         e.status === 429
-          ? "You've used all your assistant messages for today — the counter resets at midnight UTC."
+          ? (t.cap429 || "You've used all your assistant messages for today — the counter resets at midnight UTC.")
           : e.status === 503
-            ? 'The assistant is not configured on this server.'
+            ? (t.not503 || 'The assistant is not configured on this server.')
             : e.message
       )
     } finally {
@@ -89,11 +107,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
       <div className="assistant-scroll" ref={scrollRef}>
         {history.length === 0 && (
           <div className="assistant-empty muted">
-            <p>
-              Ask me about your store — I'll pull the numbers and give you
-              advice, alternatives, and honest pushback when a plan looks
-              risky.
-            </p>
+            <p>{t.empty}</p>
             <div className="assistant-suggestions">
               {suggestions.map((s) => (
                 <button key={s} type="button" className="btn btn-outline"
@@ -102,11 +116,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
                 </button>
               ))}
             </div>
-            <p className="card-sub muted">
-              Every number I quote comes straight from your store data —
-              I won't invent figures, and I'll say so when the data can't
-              answer something.
-            </p>
+            <p className="card-sub muted">{t.grounded}</p>
           </div>
         )}
 
@@ -118,7 +128,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
             <p className="assistant-msg">{turn.message}</p>
           </div>
         ))}
-        {busy && <p className="muted assistant-typing">Protik is thinking…</p>}
+        {busy && <p className="muted assistant-typing">{t.thinking}</p>}
         {note && <div className="alert alert-error">{note}</div>}
       </div>
 
@@ -126,7 +136,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask for advice — pricing, staffing, what to push…"
+          placeholder={t.placeholder || 'Ask for advice — pricing, staffing, what to push…'}
           disabled={busy}
           aria-label="Message Protik"
         />

@@ -11,6 +11,13 @@ const PERIOD_OPTIONS = [
   { value: 'month', label: 'Month' },
 ]
 
+// বাংলা mode relabels the page chrome too (docs/PROTIK_BANGLA_PLAN.md §5).
+const PERIOD_OPTIONS_BN = [
+  { value: 'day', label: 'দিন' },
+  { value: 'week', label: 'সপ্তাহ' },
+  { value: 'month', label: 'মাস' },
+]
+
 // Protik's language mode (docs/PROTIK_BANGLA_PLAN.md §1/§5):
 // auto = mirror the owner's language; bn = force Bangla everywhere;
 // en = plain English. Persisted per owner via PUT /auth/me/preferences.
@@ -113,7 +120,9 @@ export default function Protik() {
       if (e.status === 409 && run?.id) {
         pollRun(run.id)
       } else if (e.status === 409) {
-        setError('An analysis is already running. Give it a moment…')
+        setError(lang === 'bn'
+          ? 'একটা বিশ্লেষণ ইতিমধ্যে চলছে — একটু অপেক্ষা করুন…'
+          : 'An analysis is already running. Give it a moment…')
       } else {
         setError(e.message)
       }
@@ -125,6 +134,8 @@ export default function Protik() {
   }
 
   const running = run && (run.status === 'QUEUED' || run.status === 'RUNNING')
+  const forceBn = lang === 'bn'
+  const periodOptions = forceBn ? PERIOD_OPTIONS_BN : PERIOD_OPTIONS
 
   return (
     <div className="page protik-page">
@@ -132,7 +143,9 @@ export default function Protik() {
         <div>
           <h1>Protik <span className="protik-bangla">প্রতীক</span></h1>
           <p className="muted">
-            Your AI co-pilot — the big picture up top, the conversation below.
+            {lang === 'bn'
+              ? 'আপনার এআই সহ-পাইলট — উপরে বড় ছবি, নিচে কথা।'
+              : 'Your AI co-pilot — the big picture up top, the conversation below.'}
           </p>
         </div>
         <div className="protik-controls">
@@ -143,12 +156,13 @@ export default function Protik() {
             ariaLabel="Protik language"
           />
           <SegmentedControl
-            options={PERIOD_OPTIONS}
+            options={periodOptions}
             value={period}
             onChange={(p) => setPeriod(p)}
           />
           <button type="button" className="btn" onClick={handleRun} disabled={running}>
-            {running ? 'Analysing…' : '⚡ Run analysis'}
+            {running ? (forceBn ? 'বিশ্লেষণ চলছে…' : 'Analysing…')
+              : (forceBn ? '⚡ বিশ্লেষণ চালান' : '⚡ Run analysis')}
           </button>
         </div>
       </div>

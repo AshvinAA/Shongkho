@@ -1,15 +1,18 @@
 # Protik (প্রতীক) — Bangla / Banglish Translation Plan
 
-**Status: IMPLEMENTED (rollout §6 steps 1–4 of 5).** The AUTO / বাংলা /
-EN switch is live on the /protik tab: per-owner persisted mode
-(`owners.assistant_language` + `PUT /auth/me/preferences`), Banglish
-passthrough, `bn` force mode for chat AND Part A (`insights_bn`
-snapshot served via `GET /analytics/dashboard?language=bn`), Bangla
-deterministic fallbacks + synth templates, Banglish/Bangla shield
-triggers, Bengali-numeral transliteration, battery q17–q22 + `--lang`,
-Bangla suggestion chips. Tests: `tests/test_language.py` (backend),
-`ProtikLanguage.test.jsx` (frontend). Remaining: step 5 polish
-(Noto Sans Bengali webfont, per-language eval dashboard).
+**Status: IMPLEMENTED — full rollout (§6 steps 1–5) complete.** The
+AUTO / বাংলা / EN switch is live on the /protik tab: per-owner
+persisted mode (`owners.assistant_language` + `PUT
+/auth/me/preferences`), Banglish passthrough, `bn` force mode for chat
+AND Part A (`insights_bn` snapshot served via
+`GET /analytics/dashboard?language=bn`), Bangla deterministic
+fallbacks + synth templates, Banglish/Bangla shield triggers,
+Bengali-numeral transliteration, battery q17–q22 + `--lang` +
+per-language eval gates, Bangla suggestion chips and full panel i18n
+(429/503 notes, placeholder, period/run controls), Noto Sans Bengali
+webfont, `lang="bn"` on the hero. Eval: full battery 22/22 PASS on
+gemini-3.5-flash-lite. Tests: `tests/test_language.py` (backend),
+`ProtikLanguage.test.jsx` (frontend).
 
 Goal: the owner writes in Bangla (বাংলা) or Banglish (romanized Bangla
 mixed with English), Protik understands both, and replies in Bangla.
