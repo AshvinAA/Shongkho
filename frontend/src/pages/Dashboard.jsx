@@ -6,7 +6,8 @@ import Avatar from '../components/Avatar.jsx'
 import * as productsApi from '../api/products.js'
 import * as salesApi from '../api/sales.js'
 import * as employeesApi from '../api/employees.js'
-import { fmtMoney, fmtDate, todayISO } from '../utils/format.js'
+import * as staffApi from '../api/staff.js'
+import { fmtMoney, fmtDate, fmtDateTime, todayISO } from '../utils/format.js'
 
 const LOW_STOCK_THRESHOLD = 5
 
@@ -107,6 +108,76 @@ function OwnerMetrics({ stats }) {
   )
 }
 
+/**
+ * Commission card — the payout policy the owner set and what it is
+ * worth right now, computed live from this employee's own sales.
+ * Rendered inside EmployeeMetrics (employee-only).
+ */
+function MyCommissionCard({ commission }) {
+  if (!commission) return null
+  if (!commission.active) {
+    return (
+      <div className="card commission-card">
+        <div className="card-title">💰 My Commission</div>
+        <p className="muted" style={{ margin: 0 }}>
+          No commission policy yet — ask the owner to set one. You keep your
+          monthly salary either way.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="card commission-card">
+      <div className="card-title">💰 My Commission</div>
+      <div className="stat-grid" style={{ marginBottom: '0.5rem' }}>
+        <div className="card stat-card">
+          <div className="stat-label">This month</div>
+          <div className="stat-value">{fmtMoney(commission.month_commission)}</div>
+          <div className="stat-sub muted">
+            {commission.rate}% of {commission.basis === 'profit' ? 'your profit' : 'your revenue'}
+            {' '}({fmtMoney(commission.basis === 'profit' ? commission.month_profit : commission.month_revenue)})
+          </div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-label">All-time</div>
+          <div className="stat-value">{fmtMoney(commission.all_time_commission)}</div>
+          <div className="stat-sub muted">
+            on {fmtMoney(commission.basis === 'profit' ? commission.all_time_profit : commission.all_time_revenue)} generated
+          </div>
+        </div>
+      </div>
+      <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+        Policy: {commission.rate}% of the {commission.basis} you generate · updates
+        live as you sell.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Warnings card — the employee sees every formal warning and its reason.
+ * Transparency on both sides: the owner issues, the staff can read.
+ */
+function MyWarningsCard({ warnings }) {
+  if (!warnings || warnings.length === 0) return null
+  return (
+    <div className="card warn-card">
+      <div className="card-title">⚠ Warnings on record ({warnings.length})</div>
+      <ul className="warn-list">
+        {warnings.map((w) => (
+          <li key={w.id} className="warn-item">
+            <div className="warn-item-head">
+              <strong>{fmtDateTime(w.created_at)}</strong>
+              <span className="muted">by {w.issued_by_name || 'the owner'}</span>
+            </div>
+            <p className="warn-reason">{w.reason}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 /** "My Store" card — where this employee works, who they work for, pay details. */
 function MyStoreCard({ store }) {
   return (
@@ -154,6 +225,9 @@ function EmployeeMetrics({ stats }) {
   return (
     <>
       {stats.myStore && <MyStoreCard store={stats.myStore} />}
+
+      <MyCommissionCard commission={stats.myCommission} />
+      <MyWarningsCard warnings={stats.myWarnings} />
 
       <div className="stat-grid">
         <div className="card stat-card">
@@ -277,12 +351,16 @@ export default function Dashboard() {
         }
 
         if (user?.role === 'employee') {
-          const [myStore, allTime] = await Promise.all([
+          const [myStore, allTime, myCommission, myWarnings] = await Promise.all([
             employeesApi.getMyStore().catch(() => null),
             employeesApi.getMyAllTimePerformance().catch(() => null),
+            staffApi.getMyCommission().catch(() => null),
+            staffApi.getMyWarnings().catch(() => []),
           ])
           result.myStore = myStore
           result.allTime = allTime
+          result.myCommission = myCommission
+          result.myWarnings = Array.isArray(myWarnings) ? myWarnings : []
         }
 
         if (!cancelled) setStats(result)

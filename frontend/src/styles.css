@@ -1784,3 +1784,163 @@ form .modal-footer {
   margin: 0;
   font-size: 0.85rem;
 }
+
+/* =========================================================
+   Staff page: per-employee tab panel, warnings, commission
+   ========================================================= */
+.staff-tabcard {
+  margin-top: 1rem;
+}
+
+.staff-tabhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.staff-tabperson {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.staff-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.staff-tab {
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--muted, #6b7280);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.staff-tab:hover {
+  background: var(--bg, #f3f4f6);
+  color: var(--text, #111827);
+}
+
+.staff-tab-active,
+.staff-tab-active:hover {
+  background: var(--primary, #2563eb);
+  color: #fff;
+}
+
+.warn-badge {
+  background: var(--danger, #dc2626);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+}
+
+.staff-tabbody {
+  padding-top: 0.9rem;
+}
+
+.staff-tabbody-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.warn-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.warn-item {
+  border: 1px solid var(--danger-bg, #fee2e2);
+  background: var(--danger-bg, #fee2e2);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.warn-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.warn-reason {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+}
+
+.warn-card .warn-item {
+  background: #fff;
+}
+
+.commission-form {
+  margin-top: 0.25rem;
+}
+
+.commission-fields {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.commission-fields .form-group {
+  min-width: 180px;
+}
+
+.commission-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.commission-status {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: var(--bg, #f3f4f6);
+  font-size: 0.92rem;
+}
+
+.commission-status.commission-on {
+  background: #dcfce7;
+}
+
+/* EmployeeRace: revenue + profit together in the final standings */
+.race-standing-figures {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-left: auto;
+}
+
+.race-legend li {
+  flex-wrap: wrap;
+}
+
+tr.row-active {
+  background: var(--bg, #f3f4f6);
+}

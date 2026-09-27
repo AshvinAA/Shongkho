@@ -115,6 +115,7 @@ def get_db():
 def init_db():
     """Create any missing tables and run lightweight column migrations."""
     engine = get_engine()
+    import models_staff  # noqa: F401  — registers its tables on Base
     models.Base.metadata.create_all(bind=engine)
     _ensure_columns(engine)
     print("Database tables created successfully!")

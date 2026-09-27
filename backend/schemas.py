@@ -358,7 +358,76 @@ class AnalyticsDashboardResponse(BaseModel):
 
 
 # ---------------------------------------------------------
-# 8. CONVERSATIONAL ANALYTICS (Part B)
+# 8. STAFF: WARNINGS & COMMISSION
+# ---------------------------------------------------------
+class StaffWarningCreate(BaseModel):
+    """Owner-only: issue a warning to one employee."""
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class StaffWarningResponse(BaseModel):
+    """One warning as seen in a staff tab (or by the employee)."""
+    id: int
+    employee_id: int
+    issued_by: int
+    issued_by_name: Optional[str] = None
+    reason: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommissionSettingUpdate(BaseModel):
+    """
+    Owner-only: set/change an employee's commission policy.
+
+    rate=None clears the policy (commission disabled). rate>0 with
+    basis 'revenue'|'profit'. A rate of exactly 0 is rejected as
+    ambiguous — clear the policy instead of storing a 0% one.
+    """
+    basis: str = Field(..., pattern="^(revenue|profit)$")
+    rate: Optional[float] = Field(None, gt=0, le=100)
+
+    @field_validator("rate")
+    @classmethod
+    def rate_xor_clear(cls, v, info):
+        if v is None:
+            return v  # explicit clear
+        if v == 0:
+            raise ValueError("rate must be > 0 — omit it to disable commission")
+        return v
+
+
+class CommissionSettingResponse(BaseModel):
+    """The employee's commission policy as stored."""
+    employee_id: int
+    basis: str
+    rate: Optional[float] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MyCommissionResponse(BaseModel):
+    """
+    Employee-dashboard commission view: policy + the actual payout it
+    computes from THIS employee's own sales, all-time and this month.
+    `active` is False when no policy is set (rate is None) — the UI
+    shows a quiet 'no commission policy' note instead of zeros.
+    """
+    active: bool
+    basis: Optional[str] = None
+    rate: Optional[float] = None
+    all_time_revenue: float = 0.0
+    all_time_profit: float = 0.0
+    all_time_commission: float = 0.0
+    month_revenue: float = 0.0
+    month_profit: float = 0.0
+    month_commission: float = 0.0
+
+
+# ---------------------------------------------------------
+# 9. CONVERSATIONAL ANALYTICS (Part B)
 # ---------------------------------------------------------
 class AssistantChatRequest(BaseModel):
     """Payload for POST /analytics/chat — one user turn."""
