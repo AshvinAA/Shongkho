@@ -64,6 +64,12 @@ class Owner(User):
     user_id = Column(Integer, ForeignKey('users.user_id'), primary_key=True)
     store_name = Column(String(255))
 
+    # Protik's language mode (docs/PROTIK_BANGLA_PLAN.md §1):
+    # 'auto' (reply in the language of the message) | 'bn' (force Bangla,
+    # including Part A) | 'en'. Persisted per owner so the choice
+    # survives reloads; the chat request may still override per turn.
+    assistant_language = Column(String(5), server_default='auto')
+
     # Explicit join condition: employees point at me via their
     # employer_id column (not via user_id, which is what SQLAlchemy
     # would otherwise guess from the inheritance setup).

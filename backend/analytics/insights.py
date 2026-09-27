@@ -521,7 +521,18 @@ def _prompt_bundle(bundle: dict) -> dict:
     return view
 
 
-def _prompt(bundle: dict, period: str) -> str:
+def _prompt(bundle: dict, period: str, language: str = "en") -> str:
+    # Language directive (docs/PROTIK_BANGLA_PLAN.md §4): the JSON
+    # contract stays English — only summary/observation VALUES come
+    # back in Bangla. Western digits keep the number checker,
+    # synthesizer and frontend formatters working unchanged.
+    lang_rule = (
+        "\nLANGUAGE: write every summary, observation text and "
+        "areas_to_watch entry in Bangla script (বাংলা). Keep Western "
+        "digits (1234, never ১২৩৪) and keep product/people names "
+        "exactly as the data spells them.\n"
+        if language == "bn" else ""
+    )
     return (
         f"Period type: {period}. Interpret the CURRENT period for the "
         f"store owner using the context bundle below.\n\n"
@@ -533,7 +544,8 @@ def _prompt(bundle: dict, period: str) -> str:
         f"numbers exactly as they appear in the data. Address the owner as "
         f"\"you\" and give ONE concrete suggestion per point.\n"
         f"{OBSERVATION_RULES}"
-        f"Return 1-3 observations and 1-3 areas_to_watch entries.\n\n"
+        f"Return 1-3 observations and 1-3 areas_to_watch entries.\n"
+        f"{lang_rule}\n"
         f"Context bundle (current_dto = this period's aggregates for sales, "
         f"employees and products; rollup = pre-computed history statistics, "
         f"null = no history yet; chart series are summarized — every number "
@@ -546,7 +558,8 @@ def _prompt(bundle: dict, period: str) -> str:
 # Public entry point
 # ---------------------------------------------------------
 
-def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
+def build_insights(bundle: dict, period: str, *, llm_client=None,
+                   language: str = "en") -> dict:
     """
     Produce the insights snapshot payload from the context bundle.
 
@@ -555,6 +568,11 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
        "areas_to_watch": [str]}
     ANY failure (empty key / budget / schema / basis / numbers):
       {"summary": None, "degraded": True, "degraded_reason": str}
+
+    `language` ('en' | 'bn', plan §4): 'bn' writes summary/observation
+    VALUES in Bangla script; the JSON contract and the grounding gates
+    are unchanged. The snapshot carries the language it was written in
+    so the Protik hero can pick the right cache and label honestly.
 
     Never raises. The caller writes whichever dict arrives as the
     insights snapshot; the run completes either way.
@@ -570,7 +588,7 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
     if not bundle.get("current_dto", {}).get("sales"):
         return _degrade("no current data to interpret")
 
-    prompt = _prompt(bundle, period)
+    prompt = _prompt(bundle, period, language)
     last_reason = "unknown validation failure"
     try:
         attempts = validation_attempts()
@@ -578,6 +596,7 @@ def build_insights(bundle: dict, period: str, *, llm_client=None) -> dict:
             output = llm.generate_json(prompt, OUTPUT_SCHEMA, client=llm_client)
             cleaned, reason = _validate_output(output, bundle)
             if cleaned is not None:
+                cleaned["language"] = language
                 return cleaned
             last_reason = reason
             print(f"[insights] validation failed: {reason}")
@@ -604,7 +623,12 @@ products. If a change percentage "
         return _degrade(f"LLM budget exceeded: {exc}")
     except Exception as exc:  # noqa: BLE001 - the LLM step NEVER fails the run
         return _degrade(f"unexpected {type(exc).__name__}: {exc}")
-    return _degrade(last_reason)
+    result = _degrade(last_reason)
+    # Language of the payload (added on success by _validate_output's
+    # caller below; set here so degraded snapshots carry it too).
+    if result.get("degraded"):
+        result["language"] = language
+    return result
 
 
 def _repair_nested_index(bundle: dict, basis: str) -> str | None:

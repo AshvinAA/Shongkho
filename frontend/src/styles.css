@@ -2036,3 +2036,13 @@ tr.row-active {
     flex-direction: column;
   }
 }
+
+/* ---- Protik language switch (docs/PROTIK_BANGLA_PLAN.md §5) ---- */
+/* Bangla hero chrome: Noto Sans Bengali via the browser font stack. */
+.protik-hero[lang="bn"] .protik-hero-summary {
+  line-height: 1.35;
+}
+.protik-hero-lang-note {
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}

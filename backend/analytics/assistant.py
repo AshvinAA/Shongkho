@@ -22,6 +22,12 @@ The agent loop, the memory split, and the response envelope:
 
 No DB transaction spans an LLM call: rows are committed per-turn, the
 LLM calls happen between commits.
+
+LANGUAGE (docs/PROTIK_BANGLA_PLAN.md §1–§3): the language mode flows
+from the request (per-turn) or the owner's persisted preference —
+'auto' mirrors the message language, 'bn' forces Bangla everywhere
+(model prose AND deterministic fallbacks), 'en' is plain English.
+Gates are language-agnostic (Western digits + original-script names).
 """
 import re
 import time
@@ -67,6 +73,42 @@ DATA_NO_REPLY_FALLBACK = (
     "I need to pull your store numbers to answer that properly, but \
 the step didn't come out reliably this time — try rephrasing?"
 )
+
+# ---- Bangla fallbacks (docs/PROTIK_BANGLA_PLAN.md §3) ----------------
+# Deterministic answers must speak the conversation's language: an
+# English fallback inside a Bangla exchange breaks trust. Paired
+# 1:1 with the constants above; applied post-loop when force mode is
+# 'bn' (mirrored turns keep the model's own language on fallbacks).
+FALLBACK_MESSAGE_BN = "এটা নিয়ে নির্ভরযোগ্যভাবে হিসাব করতে পারলাম না — একটু অন্যভাবে জিজ্ঞেস করুন?"
+NARRATION_FALLBACK_BN = (
+    "দোকানের ডেটা টেনে এনেছি, কিন্তু নির্ভরযোগ্যভাবে উত্তরটা সাজাতে "
+    "পারলাম না — ড্যাশবোর্ডের চার্টে সংখ্যাগুলো আছে। একটু অন্যভাবে "
+    "জিজ্ঞেস করুন?"
+)
+REFUSAL_FALLBACK_BN = "দোকানের ডেটা থেকে আমি এটার উত্তর দিতে পারছি না।"
+REFUSAL_AFTER_DATA_FALLBACK_BN = (
+    "সংখ্যাগুলো এনেছি, কিন্তু এটা নিয়ে ভরসাযোগ্য পরামর্শে পৌঁছাতে "
+    "পারলাম না — একটু অন্যভাবে জিজ্ঞেস করুন?"
+)
+CONVERSATION_FALLBACK_BN = (
+    "আমি আপনার ব্যবসার সহ-পাইলট — এই সপ্তাহে কোন পণ্য বেশি চাপ দেবেন, "
+    "আজ কে সবচেয়ে বেশি বিক্রি করেছে, বা লাভ কেমন চলছে — জিজ্ঞেস করুন, "
+    "আমি সংখ্যা তুলে এনে সত্যিকারের পরামর্শ দেব।"
+)
+DATA_NO_REPLY_FALLBACK_BN = (
+    "উত্তর দিতে দোকানের সংখ্যাগুলো দরকার, কিন্তু এই ধাপটি এবার "
+    "নির্ভরযোগ্যভাবে হয়নি — একটু অন্যভাবে জিজ্ঞেস করুন?"
+)
+PREDICTION_REDIRECT_BN = (
+    "পুরোনো বিক্রির ডেটা দেখে ভবিষ্যৎ বলা সম্ভব নয় — তবে চাইলে এই "
+    "মাসের ধারাটা দেখিয়ে দিতে পারি।"
+)
+
+# Bangla fallbacks are not byte-identical to the English echo list, and
+# a Bangla canned line shipped as an ANSWER is exactly the echo failure
+# the echo shield exists for — block both spellings.
+_ECHO_PHRASE_BN_RE = re.compile(
+    r"(ব্যবসার সহ-পাইলট|হিসাব করতে পারলাম না)")
 
 # Question words that mark the ask as store-data-flavored: a no-data
 # double-fail on such a question must NOT ship the cheery co-pilot
@@ -115,12 +157,25 @@ _ECHO_PHRASE_RE = re.compile(
 # Live turn 48: "how are you" fetched sales data and the synthesizer
 # answered a GREETING with "Your store took 0…". A conversational ask
 # must never be synthesized from data — the warm line is the answer.
+# Bangla/Banglish variants per plan §3 ("kemon acho" alone is also
+# "how do you do"; "tomar nam ki" asks MY name).
 _CONVERSATION_ASK_RE = re.compile(
     r"\b(how are you|how.?s it going|who are you|what can you do|"
     r"what do you do|what do you (?:really\s+)?know|"
     r"tell me about yourself|your name|how do you work|"
     r"thanks|thank you|hello|hi there|hey there|"
-    r"good morning|good evening)\b", re.I)
+    r"good morning|good evening|"
+    r"kemon acho|kemon achen|ki khobor|kemonto achen|"
+    r"tumi kemon acho|apni kemon achen|valo achi|"
+    r"tomar nam ki|apnar nam ki|tumi ke|apni ke|"
+    r"dhonnobad|thank.*?bangla)\b"
+    # Bangla-script asks. NOTE: \b is WRONG around Bengali words whose
+    # final char is a combining vowel sign (ি ে ো — Mn/Mc, not \w in
+    # Python re): the boundary after them never matches. Guard with
+    # Bengali-block lookarounds instead (plan §3).
+    r"|(?<![\u0980-\u09FF])(?:আপনি|তুমি)\s*(?:কেমন|কে)(?![\u0980-\u09FF])"
+    r"|(?<![\u0980-\u09FF])(?:আপনার|তোমার)\s*নাম"
+    r"|(?<![\u0980-\u09FF])ধন্যবাদ", re.I)
 
 # Live q8: "How much will we sell next month?" got product-push advice —
 # the model will not reliably refuse predictions. The prompt's DESIGNED
@@ -130,10 +185,47 @@ _CONVERSATION_ASK_RE = re.compile(
 _PREDICTION_RE = re.compile(
     r"\bhow much will (?:we|i|the shop|the store|you) (?:sell|make|earn)\b"
     r"|\bwhat will (?:we|i|the shop|the store) (?:sell|make|earn)\b"
-    r"|\b(?:sales|revenue)\s+(?:forecast|projection|prediction)\b", re.I)
+    r"|\b(?:sales|revenue)\s+(?:forecast|projection|prediction)\b"
+    r"|(?<![\u0980-\u09FF])(?:আগামী|পরের)\s*(?:মাস|সপ্তাহ|বছর)"
+    r".*(?<![\u0980-\u09FF])(?:কত|কতটুকু|কিছু)"
+    r"|(?<![\u0980-\u09FF])(?:বিক্রি|বিক্রয়)\s*(?:কত|কেমন)\s*(?:হবে|বাড়বে)"
+    r"|\bagami\s*(?:mas|month|week)\b", re.I)
 PREDICTION_REDIRECT = ("I can't predict the future from past sales — but I "
                        "can show you how this month is trending, if that "
                        "helps.")
+
+# Exact-match swap table: fixed English fallback line -> Bangla pair.
+# Only DETERMINISTIC text is localized (plan §3); the model's own prose
+# is never rewritten here. Lives below every constant it references.
+_BN_FALLBACKS = {
+    FALLBACK_MESSAGE: FALLBACK_MESSAGE_BN,
+    NARRATION_FALLBACK: NARRATION_FALLBACK_BN,
+    REFUSAL_FALLBACK: REFUSAL_FALLBACK_BN,
+    REFUSAL_AFTER_DATA_FALLBACK: REFUSAL_AFTER_DATA_FALLBACK_BN,
+    CONVERSATION_FALLBACK: CONVERSATION_FALLBACK_BN,
+    DATA_NO_REPLY_FALLBACK: DATA_NO_REPLY_FALLBACK_BN,
+    PREDICTION_REDIRECT: PREDICTION_REDIRECT_BN,
+}
+
+
+def _bn_fallback_swap(reply: str) -> str:
+    """'bn' force mode: swap a fixed English fallback for its Bangla
+    pair. Exact-match on the constants — anything the model or the
+    synthesizer wrote passes through unchanged."""
+    return _BN_FALLBACKS.get(reply or "", reply or "")
+
+
+# Bengali numerals -> Western digits (plan §8 risk, live-verified with
+# gemini-3.5-flash-lite: the model writes ১৩৫০ despite the prompt
+# rule). Deterministic transliteration keeps the number checker
+# meaningful — Bengali digits have no Latin counterparts, so the
+# grounding gate would otherwise pass them vacuously.
+_BN_DIGIT_TABLE = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
+def _normalize_bn_numerals(text: str) -> str:
+    """Translate Bengali numerals in a reply to Western digits."""
+    return (text or "").translate(_BN_DIGIT_TABLE)
 
 # Live q7: "What's the weather tomorrow?" -> the model FETCHED sales
 # data and shipped store totals — a grounded non-sequitur. World-
@@ -142,7 +234,10 @@ PREDICTION_REDIRECT = ("I can't predict the future from past sales — but I "
 _WORLD_KNOWLEDGE_RE = re.compile(
     r"\b(weather|rain|temperature|forecast|sports|world cup|olympics|"
     r"election|president|prime minister|news|stock market|bitcoin|"
-    r"crypto|celebrity|movie|song)\b", re.I)
+    r"crypto|celebrity|movie|song|"
+    r"abohawa|bristi|borsha|football|cricket|sangbad)\b"
+    # Bengali-block lookarounds, not \b — see the note above.
+    r"|(?<![\u0980-\u09FF])(?:আবহাওয়া|বৃষ্টি|বিশ্বকাপ|খেলা|সংবাদ)", re.I)
 
 # Sales-domain hints (turn 45: "How are we doing on sales today?" was
 # unclassifiable, so the echo passed every gate vacuously). Deliberately
@@ -159,7 +254,13 @@ _DOMAIN_HINTS = {
         r"earnings|income|trending|"
         r"how are we|how.?s the (?:shop|store|business)|"
         r"how is the (?:shop|store|business)|how.?s business|"
-        r"how is business)\b", re.I),
+        r"how is business|"
+        # Bangla/Banglish sales words (plan §3): বিক্রি = sale(s),
+        # লাভ = profit, আয় = income, বেচা/বেচেছে = sold. Bengali-block
+        # lookarounds, not \b (combining vowel signs are not \w).
+        r"bikri|bikroy|becha|beche|bechhe|labh|aya|"
+        r"bikri kore|koto bikri)\b"
+        r"|(?<![\u0980-\u09FF])(?:বিক্রি|বিক্রয়|লাভ|আয়|বেচেছে|বেচা|দোকান)", re.I),
     "employee": re.compile(
         r"\b(employee|employees|staff|worker|workers|team|seller|sellers|"
         r"performing|performer|performers|firing|fire|who is|who was|who's|"
@@ -168,10 +269,19 @@ _DOMAIN_HINTS = {
         # seller?" / "Should I let someone go?" carry no explicit
         # employee noun — the intent word IS the signal).
         r"lay.?off|let\s+(?:\w+\s+){0,2}go|letting\s+go|struggling|weak|"
-        r"weakest|should\s+(?:i|we)\s+keep)\b", re.I),
+        r"weakest|should\s+(?:i|we)\s+keep|"
+        # Bangla/Banglish: কর্মচারী/কর্মী = employee/staff, দুর্বল = weak,
+        # চাকরি ছাড়া/বাদ = let go. (Bengali-block lookarounds — see the
+        # sales note.)
+        r"kormochari|kormi|karmachari|durbol|chakri|chakri chere)\b"
+        r"|(?<![\u0980-\u09FF])(?:কর্মচারী|কর্মী|স্টাফ|কর্মীরা|দুর্বল)", re.I),
     "product": re.compile(
         r"\b(product|products|item|items|stock|inventory|sku|best.?seller|"
-        r"bestselling|most sold|push)\b", re.I),
+        r"bestselling|most sold|push|"
+        # Bangla/Banglish: পণ্য = product, মাল/জিনিস = goods/stuff,
+        # স্টক = stock. (Bengali-block lookarounds — see the sales note.)
+        r"ponno|mal|jinis|jinish|stok)\b"
+        r"|(?<![\u0980-\u09FF])(?:পণ্য|স্টক|মাল)", re.I),
 }
 # Words that make a phrase NOT about employees even when other hints
 # fire ("best-selling product", "most sold item").
@@ -598,7 +708,7 @@ def _gates_pass(message: str, accumulated: list,
 # Deterministic final synthesis (auto-fetch path)
 # ---------------------------------------------------------
 def _synth_answer(user_message: str, domain: str | None,
-                  accumulated: list) -> str | None:
+                  accumulated: list, force_bn: bool = False) -> str | None:
     """
     Template answer built DIRECTLY from a right-domain tool payload —
     the no-LLM end of the rescue ladder. When the loop has fetched the
@@ -607,6 +717,10 @@ def _synth_answer(user_message: str, domain: str | None,
     no template fits (then the honest fallback ships as before).
     Every number is copied verbatim from the payload, so the checker
     passes by construction.
+
+    `force_bn`: Bangla template variants (plan §3) — a deterministic
+    answer must speak the conversation's language. Numbers stay Western
+    digits and names stay original-script, so the checker is unaffected.
 
     GUARD (live turn 48): a conversational ask ("how are you") is
     never synthesized — no matter what data sits in `accumulated`.
@@ -629,6 +743,12 @@ def _synth_answer(user_message: str, domain: str | None,
                 # scoped to one person, or only one employee sold in
                 # range) — "X leads … X trails" is nonsense. Answer
                 # the question with the one honest data point.
+                if force_bn:
+                    return (f"{top['name']} এই সময়ে আপনার স্টাফদের মধ্যে "
+                            f"একমাত্র বিক্রিতে ছিলেন: {top['revenue']} আয়, "
+                            f"{top['orders']} অর্ডার (লাভ {top['profit']})। "
+                            "তুলনা করার মতো কেউ নেই — পুরো ছবিটা "
+                            "ড্যাশবোর্ডের employee race-এ দেখুন।")
                 return (f"{top['name']} is the only member of your staff "
                         f"with sales in this period: {top['revenue']} in "
                         f"revenue across {top['orders']} orders (profit "
@@ -638,9 +758,20 @@ def _synth_answer(user_message: str, domain: str | None,
             if not lanes[0].get("orders"):
                 # Zero-sales period: nobody has numbers. The honest
                 # answer IS the empty state — never an apology.
+                if force_bn:
+                    return ("এই সময়ে এখনো কোনো কর্মীর বিক্রি আসেনি — "
+                            "অর্ডার এলে আমি আপনার টিমকে র‍্যাঙ্ক করে "
+                            "দেখাব।")
                 return ("No staff sales have been recorded in this "
                         "period yet — once orders land, I can rank "
                         "your team and flag the gap worth coaching.")
+            if force_bn:
+                return (f"{top['name']} স্টাফদের মধ্যে এগিয়ে — "
+                        f"{top['revenue']} আয়, {top['orders']} অর্ডার "
+                        f"(লাভ {top['profit']})। {trail['name']} পিছিয়ে — "
+                        f"{trail['revenue']} ({trail['orders']} অর্ডার)। "
+                        "এই ব্যবধান নিয়ে কথা বলা দরকার — শেখান, "
+                        "বাদ দেবেন না।")
             return (f"{top['name']} leads your staff with "
                     f"{top['revenue']} in revenue across "
                     f"{top['orders']} orders (profit {top['profit']}). "
@@ -648,6 +779,9 @@ def _synth_answer(user_message: str, domain: str | None,
                     f"({trail['orders']} orders)."
                     + " That gap is worth a conversation before it "
                     "becomes a trend — coach, don't cut.")
+        if force_bn:
+            return ("এই সময়ে এখনো কোনো কর্মীর বিক্রি আসেনি — অর্ডার এলে "
+                    "আমি আপনার টিমকে র‍্যাঙ্ক করে দেখাব।")
         return ("No staff sales show up for this period yet — once "
                 "orders land, I can rank your team and flag the gap "
                 "worth coaching.")
@@ -658,11 +792,23 @@ def _synth_answer(user_message: str, domain: str | None,
         rows = prod["data"].get("products") or []
         if rows:
             lead = rows[0]
+            metric_word = prod["data"].get("metric", "revenue")
+            if force_bn:
+                metric_bn = {"revenue": "আয়", "profit": "লাভ",
+                             "units": "ইউনিট"}.get(metric_word, "আয়")
+                return (f"{lead['name']} এই সময়ের সেরা পণ্য ({metric_bn}) "
+                        f"— {lead['revenue']} আয়, {lead['units']} ইউনিট, "
+                        f"{lead['profit']} লাভ। ধারা থাকা পর্যন্ত এটাতেই "
+                        "চাপ দিন।")
             return (f"{lead['name']} is your top product by "
-                    f"{prod['data'].get('metric', 'revenue')} — "
+                    f"{metric_word} — "
                     f"{lead['revenue']} revenue, {lead['units']} units, "
                     f"{lead['profit']} profit. Worth pushing hard this "
                     "week while the trend holds.")
+        if force_bn:
+            return ("এই সময়ে এখনো কোনো পণ্যের বিক্রি আসেনি — অর্ডার এলে "
+                    "আমি আপনার পণ্যগুলো র‍্যাঙ্ক করে বলব কোনটায় চাপ "
+                    "দেবেন।")
         return ("No product sales show up for this period yet — once "
                 "orders land, I can rank your products and pick what "
                 "to push.")
@@ -689,15 +835,24 @@ def _synth_answer(user_message: str, domain: str | None,
         # numbers against payload VALUES, and "2026-09-19" in prose is
         # a fabricated-number verdict waiting to happen.
         if s == e == today:
-            label = "today"
+            label, label_bn = "today", "আজ"
         elif s == e == (date.today() - timedelta(days=1)).isoformat():
-            label = "yesterday"
+            label, label_bn = "yesterday", "গতকাল"
         else:
-            label = "over that period"
+            label, label_bn = "over that period", "এই সময়ে"
         if tot and (tot.get("orders") or 0) > 0:
-            base = (f"Your store took {tot.get('revenue')} in revenue "
-                    f"across {tot.get('orders')} orders (profit "
-                    f"{tot.get('profit')}) {label}.")
+            if force_bn:
+                base = (f"{label_bn} দোকানের আয় {tot.get('revenue')} — "
+                        f"{tot.get('orders')} অর্ডার "
+                        f"(লাভ {tot.get('profit')})।")
+            else:
+                base = (f"Your store took {tot.get('revenue')} in revenue "
+                        f"across {tot.get('orders')} orders (profit "
+                        f"{tot.get('profit')}) {label}.")
+        elif force_bn:
+            base = (f"{label_bn} কোনো বিক্রি হয়নি — দিন এখনো বাকি। "
+                    "অর্ডার এলে আয়, লাভ আর সেরা সময়গুলো ভেঙে "
+                    "দেখাতে পারব।")
         else:
             base = (f"No sales were recorded {label} yet — the day is "
                     "still open. Once orders come in, I can break down "
@@ -710,9 +865,14 @@ def _synth_answer(user_message: str, domain: str | None,
                      if not x.get("is_owner")]
             if lanes:
                 top = lanes[0]
-                base += (f" {top['name']} leads your staff with "
-                         f"{top['revenue']} in revenue across "
-                         f"{top['orders']} orders.")
+                if force_bn:
+                    base += (f" {top['name']} স্টাফদের মধ্যে এগিয়ে — "
+                             f"{top['revenue']} আয়, {top['orders']} "
+                             "অর্ডার।")
+                else:
+                    base += (f" {top['name']} leads your staff with "
+                             f"{top['revenue']} in revenue across "
+                             f"{top['orders']} orders.")
         return base
     return None
 
@@ -720,10 +880,17 @@ def _synth_answer(user_message: str, domain: str | None,
 # ---------------------------------------------------------
 # The agent loop (doc §3.4)
 # ---------------------------------------------------------
-def handle_message(db, owner_id: int, user_message: str) -> dict:
+def handle_message(db, owner_id: int, user_message: str,
+                   language: str | None = None) -> dict:
     """
     One full assistant turn. Returns the response envelope:
       {"message": str, "tool_calls": [...], "meta": {...}}
+
+    `language` ('auto' | 'bn' | 'en', plan §1): the per-turn mode sent
+    by the UI; None falls back to the owner's persisted preference,
+    then 'auto'. 'bn' forces Bangla everywhere (prompt directive +
+    deterministic fallbacks + synth templates); 'auto' mirrors the
+    language the owner wrote in; 'en' is the historical behavior.
 
     Raises AssistantUnavailable (-> 503) when the LLM is not configured,
     DailyCapReached (-> 429) when today's budget is spent. Never raises
@@ -735,6 +902,20 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     used = messages_today(db, owner_id)
     if used >= DAILY_CAP:
         raise DailyCapReached(DAILY_CAP)
+
+    # Resolve the language mode: request value (validated by the schema)
+    # > the owner's persisted preference (plan §1) > 'auto'. Persisting
+    # happens on PUT /auth/me/preferences — reading never writes.
+    mode = language
+    if mode not in ("auto", "bn", "en"):
+        mode = None
+    if mode is None:
+        import models
+        owner = db.query(models.Owner).filter(
+            models.Owner.user_id == owner_id).first()
+        mode = (getattr(owner, "assistant_language", None)
+                if owner else None) or "auto"
+    force_bn = mode == "bn"
 
     # Telemetry: observational only — the eval harness and latency/cost
     # metrics read this; the frontend ignores unknown envelope keys.
@@ -752,6 +933,8 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                                        # narration_double_fail | no_reply
         "auto_fetch": False,           # loop fetched the data itself
         "rate_limit_waited": False,    # slept out a short 429 and retried
+        "language_mode": mode,         # auto | bn | en (plan §1)
+        "detected_language": None,     # bn | en — what the owner wrote
     }
 
     # Persist the user turn FIRST (audit + window projection).
@@ -764,10 +947,17 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     # Classify the question's data domain ONCE per turn (relevance
     # gating + wrong-domain rescue use it; see _question_domain).
     domain = _question_domain(db, owner_id, user_message)
+    detected = llm.detect_language(user_message or "")
+    telemetry["detected_language"] = detected
     context = {
         "today": date.today().isoformat(),
         "conversation": _window_projection(db, owner_id),
         "tool_results": [],
+        # Prompt-side language directive (plan §2): the system prompt's
+        # LANGUAGE rule reads this — 'bn' forces Bangla prose even on
+        # English questions; 'auto' mirrors the message language.
+        "force_language": mode,
+        "message_language": detected,
     }
     tools_summary = _tools_summary()
 
@@ -843,12 +1033,17 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
             # up and refuse; and placeholder-copied args). The loop
             # knows what data the question needs and the user cannot
             # rephrase their way out of a data answer: FETCH-FIRST.
+            # EXCEPTION: prediction-shaped asks (English or Bangla —
+            # "আগামী মাসে বিক্রি কত হবে?" classifies as sales via the
+            # বিক্রি hint) never get data: the designed answer is the
+            # redirect, and the post-loop gate enforces it regardless.
             # Not conditional on "the model already refused once" —
             # waiting for a refusal wastes a full 30-90s round before
             # the rescue even starts. Unclassified questions keep the
             # clean-refusal path (a chatbot that cannot say "I don't
             # know" is a refuse-bot).
             if domain in ("employee", "product", "sales") \
+                    and not _PREDICTION_RE.search(user_message or "") \
                     and not telemetry["auto_fetch"] \
                     and _round < TOOL_CALL_CAP - 1:
                 narration_retried = True
@@ -1024,7 +1219,8 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                                      telemetry, context,
                                      message=user_message)):
             return None
-        synth = _synth_answer(user_message or "", domain_, accumulated)
+        synth = _synth_answer(user_message or "", domain_, accumulated,
+                              force_bn=force_bn)
         if synth is None:
             return None
         telemetry["fallback_reason"] = "synthesized"
@@ -1095,7 +1291,8 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         # from the tool result beats an honest apology. With the
         # WRONG-domain payload (live q9: product question, model
         # fetched sales totals), fetch the question's own tool first.
-        synth = _synth_answer(user_message or "", domain, accumulated)
+        synth = _synth_answer(user_message or "", domain, accumulated,
+                              force_bn=force_bn)
         if synth is None and domain in ("employee", "product", "sales") \
                 and not telemetry["auto_fetch"]:
             synth = _rescue_fetch(domain)
@@ -1129,6 +1326,18 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
     elif not reply:
         reply = FALLBACK_MESSAGE
         telemetry["fallback_reason"] = "no_reply"
+
+    # Western digits everywhere (plan §3/§8): transliterate any Bengali
+    # numerals the model wrote BEFORE the grounding invariant is
+    # computed, so shipped numbers are checker-verified for real.
+    reply = _normalize_bn_numerals(reply)
+
+    # Bangla force mode (plan §3): deterministic fallback lines ship in
+    # Bangla — an English fallback inside a Bangla conversation breaks
+    # trust. Exact-match constant swap; model prose and synthesized
+    # data answers (already language-aware) pass through untouched.
+    if force_bn:
+        reply = _bn_fallback_swap(reply)
 
     # Shipped-grounding invariant for the eval harness: whatever leaves
     # this function must be checker-clean or a fixed no-number fallback.

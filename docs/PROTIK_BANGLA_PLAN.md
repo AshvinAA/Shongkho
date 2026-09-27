@@ -1,6 +1,15 @@
 # Protik (প্রতীক) — Bangla / Banglish Translation Plan
 
-**Status: PLAN ONLY — nothing here is implemented yet.**
+**Status: IMPLEMENTED (rollout §6 steps 1–4 of 5).** The AUTO / বাংলা /
+EN switch is live on the /protik tab: per-owner persisted mode
+(`owners.assistant_language` + `PUT /auth/me/preferences`), Banglish
+passthrough, `bn` force mode for chat AND Part A (`insights_bn`
+snapshot served via `GET /analytics/dashboard?language=bn`), Bangla
+deterministic fallbacks + synth templates, Banglish/Bangla shield
+triggers, Bengali-numeral transliteration, battery q17–q22 + `--lang`,
+Bangla suggestion chips. Tests: `tests/test_language.py` (backend),
+`ProtikLanguage.test.jsx` (frontend). Remaining: step 5 polish
+(Noto Sans Bengali webfont, per-language eval dashboard).
 
 Goal: the owner writes in Bangla (বাংলা) or Banglish (romanized Bangla
 mixed with English), Protik understands both, and replies in Bangla.

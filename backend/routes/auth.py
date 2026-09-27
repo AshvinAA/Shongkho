@@ -6,6 +6,7 @@ Session flow:
   every protected route then re-reads it via deps.get_current_user.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import deps
@@ -15,6 +16,11 @@ import services
 from database import get_db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+class PreferencesUpdate(BaseModel):
+    """PUT /auth/me/preferences — Protik language mode (plan §5)."""
+    assistant_language: str = Field(pattern="^(auto|bn|en)$")
 
 
 @router.post("/register", response_model=schemas.RegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -121,4 +127,32 @@ def me(request: Request, db: Session = Depends(get_db)):
         "role": user.user_type,
         "name": user.name,
         "photo": user.photo,
+        # Protik's language mode (owners only; employees never see him).
+        "assistant_language": (getattr(user, "assistant_language", None)
+                               or "auto") if user.user_type == "owner" else None,
     }
+
+
+@router.put("/me/preferences")
+def update_my_preferences(payload: PreferencesUpdate, request: Request,
+                          db: Session = Depends(get_db)):
+    """
+    Persist the caller's UI preferences (docs/PROTIK_BANGLA_PLAN.md §5).
+
+    Owners: assistant_language in {'auto', 'bn', 'en'} — Protik's
+    language mode on the /protik tab. Employees get a 403: they have
+    no Protik surface.
+    """
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="Session no longer valid")
+    if user.user_type != "owner":
+        raise HTTPException(status_code=403,
+                            detail="Preferences are available to store owners only.")
+    user.assistant_language = payload.assistant_language
+    db.commit()
+    return {"assistant_language": user.assistant_language}

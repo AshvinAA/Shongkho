@@ -17,8 +17,10 @@ export function getRunStatus(runId) {
 /**
  * Latest completed snapshot per section for one period.
  * period: 'day' | 'week' | 'month'
+ * language: 'bn' serves the Bangla commentary snapshot when one exists
+ * (falls back to English with an honest missing_language marker).
  * Returns { period, generated_at, sections: { sales?, employees?, products?, insights? } }
  */
-export function getDashboard(period = 'week') {
-  return get(`/analytics/dashboard${qs({ period })}`)
+export function getDashboard(period = 'week', language) {
+  return get(`/analytics/dashboard${qs({ period, language })}`)
 }
