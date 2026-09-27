@@ -1,0 +1,223 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth } from '../context/AuthContext.jsx'
+import { getDashboard, getRunStatus, startRun } from '../api/analytics.js'
+import { SegmentedControl } from '../components/analytics/common.jsx'
+import AssistantPanel from '../components/assistant/AssistantPanel.jsx'
+
+const PERIOD_OPTIONS = [
+  { value: 'day', label: 'Day' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+]
+
+const POLL_MS = 1500
+
+/**
+ * Protik (প্রতীক) — the store's AI co-pilot, on his own tab.
+ *
+ * Both LLM integrations live here on one screen:
+ *   - Track A (Part A): the generative analysis from the latest
+ *     analytics run, shown in HUGE type — the hero statement of the
+ *     page. A "Run analysis" control refreshes it.
+ *   - Track B (Part B): Protik's chat interface beside/under the hero,
+ *     reusing the shared AssistantPanel.
+ *
+ * The run lifecycle mirrors Analytics.jsx (start -> poll -> refetch)
+ * but renders only the insights section, so this page stays focused.
+ */
+export default function Protik() {
+  const { user } = useAuth()
+  const isOwner = user?.role === 'owner'
+
+  const [period, setPeriod] = useState('week')
+  const [insights, setInsights] = useState(null)
+  const [generatedAt, setGeneratedAt] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const [run, setRun] = useState(null)
+  const pollRef = useRef(null)
+
+  const loadDashboard = useCallback(async (p = period, quiet = false) => {
+    if (!quiet) setLoading(true)
+    try {
+      const data = await getDashboard(p)
+      setInsights(data.sections?.insights || null)
+      setGeneratedAt(data.generated_at)
+      setError(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [period])
+
+  useEffect(() => {
+    if (isOwner) loadDashboard(period)
+  }, [isOwner, period, loadDashboard])
+
+  useEffect(() => () => clearInterval(pollRef.current), [])
+
+  function pollRun(runId) {
+    clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await getRunStatus(runId)
+        setRun({ id: runId, status: status.status, reason: status.failure_reason })
+        if (status.status === 'COMPLETED' || status.status === 'FAILED') {
+          clearInterval(pollRef.current)
+          if (status.status === 'COMPLETED') loadDashboard(period, true)
+        }
+      } catch (e) {
+        if (e.status === 404) {
+          clearInterval(pollRef.current)
+          setRun({ id: runId, status: 'FAILED', reason: 'Run not found' })
+        }
+      }
+    }, POLL_MS)
+  }
+
+  async function handleRun() {
+    setError(null)
+    try {
+      const res = await startRun(period)
+      setRun({ id: res.run_id, status: res.status || 'QUEUED' })
+      if (res.status === 'COMPLETED') {
+        await loadDashboard(period, true)
+      } else {
+        pollRun(res.run_id)
+      }
+    } catch (e) {
+      if (e.status === 409 && run?.id) {
+        pollRun(run.id)
+      } else if (e.status === 409) {
+        setError('An analysis is already running. Give it a moment…')
+      } else {
+        setError(e.message)
+      }
+    }
+  }
+
+  if (!isOwner) {
+    return <p className="muted">Protik is available to store owners only.</p>
+  }
+
+  const running = run && (run.status === 'QUEUED' || run.status === 'RUNNING')
+
+  return (
+    <div className="page protik-page">
+      <div className="page-header">
+        <div>
+          <h1>Protik <span className="protik-bangla">প্রতীক</span></h1>
+          <p className="muted">
+            Your AI co-pilot — the big picture up top, the conversation below.
+          </p>
+        </div>
+        <div className="protik-controls">
+          <SegmentedControl
+            options={PERIOD_OPTIONS}
+            value={period}
+            onChange={(p) => setPeriod(p)}
+          />
+          <button type="button" className="btn" onClick={handleRun} disabled={running}>
+            {running ? 'Analysing…' : '⚡ Run analysis'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="alert alert-error" role="alert">{error}</div>}
+
+      {/* ---- Hero: the generative analysis, in huge type ---- */}
+      <section className="protik-hero" aria-live="polite">
+        {loading ? (
+          <div className="page-loading" role="status">
+            <div className="spinner" />
+            <p className="muted">Protik is reading your numbers…</p>
+          </div>
+        ) : (
+          <InsightsHero insights={insights} period={period} generatedAt={generatedAt} />
+        )}
+        {running && (
+          <p className="protik-refreshing muted">Protik is crunching a fresh analysis…</p>
+        )}
+      </section>
+
+      {/* ---- The chat, beside/under the hero ---- */}
+      <section className="protik-chat-section">
+        <AssistantPanel />
+      </section>
+    </div>
+  )
+}
+
+/**
+ * The hero statement. Success = huge summary + supporting observations.
+ * Degraded/pending/empty get honest, quieter states — never fake prose.
+ */
+function InsightsHero({ insights, period, generatedAt }) {
+  if (!insights) {
+    return (
+      <div className="protik-hero-inner">
+        <p className="protik-hero-summary">
+          Run an analysis and I'll tell you what your store is trying to say.
+        </p>
+        <p className="muted">
+          No analysis for this {period} yet — hit <strong>⚡ Run analysis</strong> above.
+        </p>
+      </div>
+    )
+  }
+  if (insights.pending) {
+    return (
+      <div className="protik-hero-inner">
+        <p className="protik-hero-summary">{insights.pending}</p>
+      </div>
+    )
+  }
+  if (insights.degraded) {
+    return (
+      <div className="protik-hero-inner">
+        <p className="protik-hero-summary">
+          I couldn't write a reliable commentary for this {period} — your charts
+          on the Analytics tab remain the source of truth.
+        </p>
+        {insights.degraded_reason && (
+          <p className="card-sub muted" title={insights.degraded_reason}>
+            Reason: {insights.degraded_reason}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const observations = Array.isArray(insights.observations) ? insights.observations : []
+  const watch = Array.isArray(insights.areas_to_watch) ? insights.areas_to_watch : []
+
+  return (
+    <div className="protik-hero-inner">
+      {insights.summary ? (
+        <p className="protik-hero-summary">{insights.summary}</p>
+      ) : (
+        <p className="protik-hero-summary">Your store is steady — no drama in these numbers.</p>
+      )}
+
+      {observations.length > 0 && (
+        <ul className="protik-hero-points">
+          {observations.map((obs, i) => (
+            <li key={i}>{obs.text}</li>
+          ))}
+        </ul>
+      )}
+      {watch.length > 0 && (
+        <p className="protik-hero-watch muted">
+          👀 Watching: {watch.join(' · ')}
+        </p>
+      )}
+      {generatedAt && (
+        <p className="protik-hero-stamp muted">
+          Generated {new Date(generatedAt).toLocaleString()} · ask Protik anything below
+        </p>
+      )}
+    </div>
+  )
+}
