@@ -150,6 +150,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--only", help="comma-separated case ids")
+    ap.add_argument("--gap", type=float, default=0.0,
+                    help="seconds to sleep between questions — keep the "
+                         "run under a remote free-tier RPM (Gemini flash-lite "
+                         "quota is 15/min; use --gap 5..12)")
     args = ap.parse_args()
 
     cases = _cases()
@@ -166,7 +170,9 @@ def main():
             ignore_cleanup_errors=True) as tmp:
         db = _seed(tmp)
         fails = warns = 0
-        for case in cases:
+        for i, case in enumerate(cases):
+            if args.gap > 0 and i > 0:
+                time.sleep(args.gap)
             t0 = time.monotonic()
             try:
                 out = assistant.handle_message(db, 1, case["q"])

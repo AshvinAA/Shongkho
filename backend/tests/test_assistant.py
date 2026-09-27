@@ -633,6 +633,51 @@ class TestAgentLoop:
 
 
 # ---------------------------------------------------------
+# Decision schema enum tightening (remote responseSchema)
+# ---------------------------------------------------------
+class TestDecisionSchemaEnum:
+    def test_base_schema_stays_loose(self):
+        # The default schema keeps free-form fields: injectable test
+        # clients and the no-registry path are unaffected.
+        props = llm._DECISION_SCHEMA["properties"]
+        assert "enum" not in props["action"]
+        assert "enum" not in props["tool"]
+        assert "enum" not in props["args"]["properties"]["metric"]
+
+    def test_allowed_tools_tightens_enums(self):
+        names = ["get_top_products", "get_employee_performance",
+                 "get_sales_metrics"]
+        schema = llm._decision_schema_for(names)
+        props = schema["properties"]
+        assert props["action"]["enum"] == ["final", "tool", "refuse"]
+        assert props["tool"]["enum"] == sorted(names)
+        assert props["args"]["properties"]["metric"]["enum"] == \
+            ["revenue", "profit", "units"]
+        # The BASE schema must not be mutated (deep copy).
+        assert "enum" not in llm._DECISION_SCHEMA["properties"]["action"]
+
+    def test_none_allowed_tools_returns_base(self):
+        assert llm._decision_schema_for(None) is llm._DECISION_SCHEMA
+
+    def test_loop_passes_registry_names(self, db_session, configured,
+                                        monkeypatch):
+        # The agent loop must hand the closed registry to chat_decide so
+        # remote models are enum-constrained (on Gemini, hallucinated
+        # tool names burned counted rounds before this).
+        _seed_store(db_session)
+        captured = {}
+
+        def spy(context, tools_summary, **kw):
+            captured["allowed"] = kw.get("allowed_tools")
+            return {"action": "final", "message": "ok"}
+
+        monkeypatch.setattr(llm, "chat_decide", spy)
+        assistant.handle_message(db_session, 1,
+                                 "How are we doing on sales today?")
+        assert captured["allowed"] == sorted(tools.REGISTRY)
+
+
+# ---------------------------------------------------------
 # Route contract
 # ---------------------------------------------------------
 class TestChatRoutes:

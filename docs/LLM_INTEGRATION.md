@@ -260,7 +260,7 @@ Env (all optional, sane defaults):
 | Var | Default | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | *(empty = degrade)* | both parts |
-| `LLM_MODEL` | `gemini-2.5-flash` | cost/latency-appropriate for both |
+| `LLM_MODEL` | `gemini-3.5-flash-lite` | free-tier friendly; limits are per-model (flash-lite 15/min, flash tiers 5/min) |
 | `LLM_BUDGET_SECONDS` | `8` | Part A total LLM budget |
 | `ASSISTANT_WINDOW` | `8` | sliding-window turns |
 | `ASSISTANT_DAILY_CAP` | `20` | Part B cap |
@@ -651,4 +651,42 @@ cold start, history rollup, gap-streak-break, full DB pipeline,
 budget-degrade) — run with
 `LLM_PROVIDER=ollama LLM_BUDGET_SECONDS=120 python live_ollama_battery.py`
 from backend/. Switching to Gemini stays an env change only:
-`LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `LLM_MODEL=gemini-2.5-flash`.
+`LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `LLM_MODEL=gemini-3.5-flash-lite`.
+
+### 17. Gemini switch (2026-09-27) — env change + two provider-neutral hardenings
+
+Switched dev to Gemini per the plan above. Live findings, all fixed:
+
+ 1. **New keys cannot call `gemini-2.5-flash`** (HTTP 404: "no longer
+    available to new users") even though the model list shows it.
+    `gemini-3.8-flash` works but its free tier is **5 RPM** — a chat
+    turn (2-3 calls) out-paces it. `gemini-3.5-flash-lite` (the coded
+    default all along) works and sustains **15 RPM**: verified 8/8
+    rapid calls, then a full 16/16 battery pass.
+ 2. **Schema enums added (provider-neutral fix).** Under Ollama's
+    constrained decoding, free-form schema strings were held in line by
+    the prompt; Gemini's `responseSchema` free-texted hallucinated tool
+    names (`get_top_products_fixed_call_...`). `chat_decide` now takes
+    `allowed_tools=` and `_decision_schema_for()` enum-tightens
+    `action` (final|tool|refuse), `tool` (registry names), and `metric`
+    (revenue|profit|units) — both back ends honor string enums. The
+    agent loop passes `sorted(tools.REGISTRY)`.
+ 3. **Empty-args calls (`args: {}`).** The schema marks args optional;
+    Gemini minimizes and omits dates, the tool ValueErrors, the
+    corrective retry is ignored, five identical empty-args calls burn
+    the cap, auto-fetch rescue ships the synth. Fixes: the date
+    inference in `_sanitize_tool_args` (keyword windows + literal ISO
+    dates in the question — explicit dates always outrank "today";
+    live q15 answered "today" for a stated 7-day range before this),
+    and `_parse_date` error text rewritten as a corrective prompt
+    ("repeat the call with start/end as YYYY-MM-DD") for genuinely
+    malformed values. Empty-string args are now filled — never
+    erroring.
+ 4. **Rescue-ladder economics unchanged** — on Gemini it fires rarely
+    (2 of 16 battery questions), which is the designed behavior. The
+    429 mid-battery FAILs were pacing artifacts; `--gap` pacing fixed
+    the harness, not the product.
+
+Verified: backend suite 243 passing (incl. 4 new enum regressions),
+battery 16/16 on `gemini-3.5-flash-lite`. Free-tier rate-limit message
+now says limits vary per model instead of hardcoding 20/min.
