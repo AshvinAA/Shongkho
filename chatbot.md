@@ -102,9 +102,10 @@ One turn, start to finish:
 Telemetry (`meta`) is observational: `rounds_used`,
 `narration_retried`, `specificity_retried`, `grounded_first_pass`,
 `refused`, `tool_calls_ok`, `tool_errors`, `context_bytes`,
-`auto_fetch`, `fallback_reason` ∈ {`decision_error`, `cap_exhausted`,
-`narration_double_fail`, `conversation_double_fail`,
-`refuse_after_data`, `synthesized`, `no_reply`}, and
+`auto_fetch`, `rate_limit_waited`, `fallback_reason` ∈
+{`decision_error`, `cap_exhausted`, `narration_double_fail`,
+`conversation_double_fail`, `refuse_after_data`, `synthesized`,
+`no_reply`, `prediction_redirect`, `world_knowledge_redirect`}, and
 `shipped_grounded` — the loop's own verdict that the shipped message
 is checker-clean (the eval harness treats a False as the fatal
 `fabricated_number_leakage`).
@@ -148,6 +149,15 @@ a pointed data question.
 
 The 3B model's failures are predictable, so the loop compensates
 deterministically. In order, from cheapest to most drastic:
+
+0. **429 smoothing (`rate_limit_wait_s`).** A rate-limit decision
+   failure carries Google's own retry hint. A short window
+   (≤ `RATE_LIMIT_MAX_WAIT_S`) is slept out and the SAME round retried
+   once (`meta.rate_limit_waited`); a longer window degrades
+   immediately to the honest fallback — holding the owner's click
+   hostage for a minute is worse UX than an honest retry-now card.
+   Local providers are never rate-limited, so their errors carry no
+   hint and this rung never fires on Ollama.
 
 1. **Corrective narration retry (once, counted against the cap).**
    The first failed narration gets an error observation whose wording
@@ -210,6 +220,11 @@ deterministically. In order, from cheapest to most drastic:
    - no data on a conversational ask → `CONVERSATION_FALLBACK`
      (the co-pilot pitch — the designed answer for a misfired
      greeting).
+
+   Priority note (Gemini-eval-fixed): the prediction/world-knowledge
+   shields fire BEFORE the refuse-after-data apology — a prediction
+   ask that fetched data and then refused ships `PREDICTION_REDIRECT`,
+   never a generic apology for a question the design already answers.
 
 Order of last resort: **model narration → synthesis → honest
 fallback**. A right-domain fetch plus an honest fallback always beats

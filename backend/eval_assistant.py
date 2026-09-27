@@ -289,6 +289,10 @@ def main():
                         help="skip the multi-tool and named-employee cases")
     parser.add_argument("--json", action="store_true",
                         help="machine-readable output")
+    parser.add_argument("--gap", type=float, default=0.0,
+                        help="seconds to sleep between scenarios — keep the "
+                             "run under a remote free-tier RPM (Gemini "
+                             "flash-lite quota is 15/min; use --gap 5..12)")
     args = parser.parse_args()
 
     if args.list:
@@ -310,7 +314,9 @@ def main():
 
     import models
     rows = []
-    for case in cases:
+    for i, case in enumerate(cases):
+        if args.gap > 0 and i > 0:
+            time.sleep(args.gap)
         if case.get("fresh", True):
             # Isolate this scenario from everything before it.
             db.query(models.AssistantMessage).delete()

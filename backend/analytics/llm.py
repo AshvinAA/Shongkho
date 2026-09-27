@@ -126,7 +126,16 @@ class LlmBudgetExceeded(Exception):
 
 
 class ChatDecisionError(Exception):
-    """A chat decision round-trip failed (transport, empty, unparseable)."""
+    """A chat decision round-trip failed (transport, empty, unparseable).
+
+    `rate_limit_wait_s` carries Google's 429 retry hint when the failure
+    was quota exhaustion — the caller may choose to wait out a short
+    window and retry once instead of degrading to a fallback.
+    """
+
+    def __init__(self, message: str, rate_limit_wait_s: float | None = None):
+        super().__init__(message)
+        self.rate_limit_wait_s = rate_limit_wait_s
 
 
 def generate_json(prompt: str, schema: dict, *, client=None) -> dict:
@@ -477,7 +486,8 @@ ORDER and act on the FIRST that matches:
       → {"action": "final", "message": "..."} — a warm colleague \
       reply with NO numbers, NO digits at all (spell counts out), \
       and NO tool call. "What do you really know?" → describe what \
-      you watch and suggest what to ask.
+      you watch and suggest what to ask — in YOUR OWN words; the \
+      phrasing in these examples is off-limits for answers.
 
   Q2. Is it about THIS store — sales, products, employees, revenue, \
       profit, stock, hiring, firing, or advice that needs them?
@@ -683,7 +693,8 @@ def chat_decide(context: dict, tools_summary: str, *, client=None,
         detail = getattr(client, "last_error", None)
         if attempt < max_attempts - 1:
             time.sleep(min(2 ** attempt, max(0.0, (deadline - time.monotonic()) / 2)))
-    raise ChatDecisionError(detail or "no valid decision within budget")
+    raise ChatDecisionError(detail or "no valid decision within budget",
+                            rate_limit_wait_s=getattr(client, "retry_after_s", None))
 
 
 # Response schema for chat decisions (constrained decoding locally;

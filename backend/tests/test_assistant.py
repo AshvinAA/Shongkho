@@ -599,6 +599,88 @@ class TestAgentLoop:
         out = assistant.handle_message(db_session, 1, "hello")
         assert out["message"] == assistant.FALLBACK_MESSAGE
 
+    def test_short_429_is_waited_out_and_retried(self, db_session,
+                                                 configured, monkeypatch):
+        """Google's own retry hint arrives with a short window: sleep it
+        out and retry the SAME round once — the owner's click survives
+        instead of degrading to the fallback."""
+        _seed_store(db_session)
+        calls = {"n": 0}
+        monkeypatch.setattr(assistant.time, "sleep", lambda s: None)
+
+        def flaky(context, tools_summary, **kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise llm.ChatDecisionError("rate limited", rate_limit_wait_s=3.0)
+            if calls["n"] == 2:
+                return {"action": "tool", "tool": "get_sales_metrics", "args": {}}
+            return {"action": "final", "message": "Revenue was 500.0 today."}
+
+        monkeypatch.setattr(llm, "chat_decide", flaky)
+        out = assistant.handle_message(db_session, 1,
+                                       "How are we doing on sales today?")
+        assert calls["n"] == 3
+        assert out["message"] == "Revenue was 500.0 today."
+        assert out["meta"]["rate_limit_waited"] is True
+        assert out["meta"]["fallback_reason"] is None
+
+    def test_long_429_degrades_without_waiting(self, db_session, configured,
+                                               monkeypatch):
+        """A retry window beyond RATE_LIMIT_MAX_WAIT_S is never slept
+        through — degrade immediately with the honest fallback."""
+        _seed_store(db_session)
+        calls = {"n": 0}
+        slept = []
+        monkeypatch.setattr(assistant.time, "sleep", lambda s: slept.append(s))
+
+        def flaky(context, tools_summary, **kw):
+            calls["n"] += 1
+            raise llm.ChatDecisionError("rate limited", rate_limit_wait_s=45.0)
+
+        monkeypatch.setattr(llm, "chat_decide", flaky)
+        out = assistant.handle_message(db_session, 1, "hello")
+        assert calls["n"] == 1          # no retry
+        assert slept == []              # no wait either
+        assert out["message"] == assistant.FALLBACK_MESSAGE
+        assert out["meta"]["fallback_reason"] == "decision_error"
+
+    def test_429_wait_happens_only_once_per_turn(self, db_session,
+                                                 configured, monkeypatch):
+        """A second 429 in the same turn degrades — one retry is the
+        budget, otherwise a quota drought burns the whole cap."""
+        _seed_store(db_session)
+        calls = {"n": 0}
+        monkeypatch.setattr(assistant.time, "sleep", lambda s: None)
+
+        def flaky(context, tools_summary, **kw):
+            calls["n"] += 1
+            raise llm.ChatDecisionError("rate limited", rate_limit_wait_s=2.0)
+
+        monkeypatch.setattr(llm, "chat_decide", flaky)
+        out = assistant.handle_message(db_session, 1, "hello")
+        assert calls["n"] == 2          # initial + the single retry
+        assert out["meta"]["fallback_reason"] == "decision_error"
+        assert out["meta"]["rate_limit_waited"] is True
+
+    def test_prediction_redirect_wins_over_refuse_after_data(
+            self, db_session, configured, monkeypatch):
+        """A prediction ask that fetched data and then refused must ship
+        the designed redirect — not the generic refuse-after-data
+        apology (live eval: the redirect IS the prediction answer)."""
+        _seed_store(db_session)
+        script = ScriptedChat([
+            {"action": "tool", "tool": "get_sales_metrics",
+             "args": {"start": date.today().isoformat(),
+                      "end": date.today().isoformat()}},
+            {"action": "refuse", "message": "I cannot predict that."},
+            {"action": "refuse", "message": "I cannot predict that."},
+        ])
+        monkeypatch.setattr(llm, "chat_decide", script)
+        out = assistant.handle_message(
+            db_session, 1, "How much will we sell next month?")
+        assert out["message"] == assistant.PREDICTION_REDIRECT
+        assert out["meta"]["fallback_reason"] == "prediction_redirect"
+
     def test_daily_cap_reached(self, db_session, configured, monkeypatch):
         _seed_store(db_session)
         for _ in range(assistant.DAILY_CAP):

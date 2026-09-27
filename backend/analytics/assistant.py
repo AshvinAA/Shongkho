@@ -24,6 +24,7 @@ No DB transaction spans an LLM call: rows are committed per-turn, the
 LLM calls happen between commits.
 """
 import re
+import time
 from datetime import date, datetime, timedelta
 
 from analytics import insights, llm, tools
@@ -750,6 +751,7 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         "fallback_reason": None,       # decision_error | cap_exhausted |
                                        # narration_double_fail | no_reply
         "auto_fetch": False,           # loop fetched the data itself
+        "rate_limit_waited": False,    # slept out a short 429 and retried
     }
 
     # Persist the user turn FIRST (audit + window projection).
@@ -785,6 +787,22 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
                 context, tools_summary,
                 allowed_tools=sorted(tools.REGISTRY))
         except llm.ChatDecisionError as exc:
+            # 429 smoothing: quota exhaustion carries Google's own retry
+            # hint. A short window is slept out and the round retried
+            # ONCE — the owner's click survives instead of degrading to
+            # "try rephrasing". Longer windows degrade immediately
+            # (holding the request hostage for a minute is worse UX than
+            # an honest retry-now card), and local providers are never
+            # rate-limited so their errors carry no hint.
+            wait_s = getattr(exc, "rate_limit_wait_s", None)
+            if (wait_s is not None and not telemetry.get("rate_limit_waited")
+                    and _round < TOOL_CALL_CAP - 1
+                    and 0 < wait_s <= llm.RATE_LIMIT_MAX_WAIT_S):
+                telemetry["rate_limit_waited"] = True
+                print(f"[assistant] rate-limited — waiting {wait_s:.0f}s "
+                      "and retrying once")
+                time.sleep(wait_s + 1.0)
+                continue
             # Provider down / budget gone / unparseable: degrade honestly
             # (doc: never a 500 for LLM failures).
             print(f"[assistant] decision failed: {exc}")
@@ -1012,7 +1030,17 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         telemetry["fallback_reason"] = "synthesized"
         return synth
 
-    if refused:
+    if _PREDICTION_RE.search(user_message or ""):
+        # Unambiguously prediction-shaped: ALWAYS ship the designed
+        # redirect — even when the turn fetched data and then refused
+        # (live eval: "how much will we sell next month" -> fetch +
+        # refuse-after-data -> a generic apology instead of the
+        # redirect the design promised). q8 behavior.
+        reply = PREDICTION_REDIRECT
+        refused = True
+        telemetry["refused"] = True
+        telemetry["fallback_reason"] = "prediction_redirect"
+    elif refused:
         # Already sanitized in the loop (numbers -> fixed refusal text).
         pass
     elif _WORLD_KNOWLEDGE_RE.search(user_message or "") \
@@ -1024,14 +1052,6 @@ def handle_message(db, owner_id: int, user_message: str) -> dict:
         refused = True
         telemetry["refused"] = True
         telemetry["fallback_reason"] = "world_knowledge_redirect"
-    elif _PREDICTION_RE.search(user_message or ""):
-        # Unambiguously prediction-shaped: ship the designed redirect
-        # (live q8 — the 3B answers predictions with unrelated advice
-        # instead of refusing).
-        reply = PREDICTION_REDIRECT
-        refused = True
-        telemetry["refused"] = True
-        telemetry["fallback_reason"] = "prediction_redirect"
     elif _CONVERSATION_ASK_RE.search(user_message or ""):
         # Live q6: "What do you really know?" -> the model FETCHED data
         # and grounded real digits into its reply, which the gates then
