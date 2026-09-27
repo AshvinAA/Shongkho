@@ -56,7 +56,7 @@ describe('AssistantPanel', () => {
       meta: {},
     })
     render(<AssistantPanel />)
-    const input = screen.getByLabelText(/message the analytics assistant/i)
+    const input = screen.getByLabelText(/message Protik/i)
     await userEvent.type(input, 'What should I push this week?{Enter}')
     await waitFor(() =>
       expect(screen.getByText(/Push Mustard Oil 1L/i)).toBeInTheDocument(),
@@ -70,7 +70,7 @@ describe('AssistantPanel', () => {
     assistantApi.sendChat.mockRejectedValue(err)
     render(<AssistantPanel />)
     await userEvent.type(
-      screen.getByLabelText(/message the analytics assistant/i),
+      screen.getByLabelText(/message Protik/i),
       'hello{Enter}',
     )
     expect(await screen.findByText(/used all your assistant messages/i)).toBeInTheDocument()
@@ -82,7 +82,7 @@ describe('AssistantPanel', () => {
     assistantApi.sendChat.mockRejectedValue(err)
     render(<AssistantPanel />)
     await userEvent.type(
-      screen.getByLabelText(/message the analytics assistant/i),
+      screen.getByLabelText(/message Protik/i),
       'hello{Enter}',
     )
     expect(await screen.findByText(/assistant is not configured/i)).toBeInTheDocument()
@@ -91,7 +91,7 @@ describe('AssistantPanel', () => {
   it('does not send empty or whitespace-only input', async () => {
     render(<AssistantPanel />)
     await userEvent.type(
-      screen.getByLabelText(/message the analytics assistant/i),
+      screen.getByLabelText(/message Protik/i),
       '   {Enter}',
     )
     expect(assistantApi.sendChat).not.toHaveBeenCalled()

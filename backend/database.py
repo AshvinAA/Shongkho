@@ -131,6 +131,10 @@ def _ensure_columns(engine):
     migrations = [
         # (table, column, DDL)
         ("products", "photo", "ALTER TABLE products ADD COLUMN photo VARCHAR(550)"),
+        # Protik language mode (docs/PROTIK_BANGLA_PLAN.md §1).
+        ("owners", "assistant_language",
+         "ALTER TABLE owners ADD COLUMN assistant_language VARCHAR(5) "
+         "DEFAULT 'auto'"),
     ]
     with engine.connect() as conn:
         for table, column, ddl in migrations:

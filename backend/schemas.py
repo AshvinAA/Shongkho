@@ -432,6 +432,11 @@ class MyCommissionResponse(BaseModel):
 class AssistantChatRequest(BaseModel):
     """Payload for POST /analytics/chat — one user turn."""
     message: str = Field(min_length=1, max_length=2000)
+    # Protik language mode (docs/PROTIK_BANGLA_PLAN.md §1): the UI's
+    # switch state per turn. 'auto' mirrors the message language; 'bn'
+    # forces Bangla; 'en' is the historical behavior. None = not sent
+    # (older clients) -> falls back to the owner's persisted preference.
+    language: Optional[str] = Field(default=None, pattern="^(auto|bn|en)$")
 
 
 class AssistantChatResponse(BaseModel):

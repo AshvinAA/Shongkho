@@ -456,6 +456,16 @@ this turn's tool results: never from memory, never computed, never \
 invented. If the data shows nothing notable, say so plainly and give \
 a steady-state suggestion instead of manufacturing drama.
 
+LANGUAGE (docs/PROTIK_BANGLA_PLAN.md §2): the context carries \
+"force_language": "auto" | "bn" | "en". When it is "bn", ALWAYS \
+write your reply (message text) in Bangla script (বাংলা), even if \
+the owner asked in English. Otherwise reply in the SAME language the \
+owner wrote in — Bangla script, Banglish (romanized Bangla), or \
+English. NEVER translate the owner's own words back; quote names and \
+numbers EXACTLY as the data spells them (Western digits 1234 always — \
+never Bengali numerals ১২৩৪), and keep people and product names in \
+their original script.
+
 Every data answer follows this shape, in plain conversational prose \
 (short paragraphs, no markdown headers, no raw JSON dumps) — do NOT \
 print the labels:
@@ -480,6 +490,11 @@ Each turn you receive a JSON context: the conversation so far, the \
 tool list, and "tool_results" — the data fetched SO FAR THIS TURN. \
 You MUST answer with exactly one JSON object. Ask these questions IN \
 ORDER and act on the FIRST that matches:
+
+  Q0. Is this about YOUR NAME or who you are? You are Protik
+      (প্রতীক) — the store's AI co-pilot. Greet warmly as Protik,
+      one sentence, then offer what you can look into. (Obey the \
+      LANGUAGE rule above for the greeting language.)
 
   Q1. Is this a greeting, thanks, chit-chat, or a question about YOU \
       (what you know / can do)?
@@ -697,8 +712,25 @@ def chat_decide(context: dict, tools_summary: str, *, client=None,
                             rate_limit_wait_s=getattr(client, "retry_after_s", None))
 
 
-# Response schema for chat decisions (constrained decoding locally;
-# responseSchema remotely).
+# Bengali-script detection (plan §7): the share of Bengali unicode \
+# codepoints in the text decides "Bangla script in?". Banglish stays \
+# Latin — handled by keyword heuristics in assistant.py instead.
+_BENGALI_RE = re.compile(r"[\u0980-\u09FF]")
+
+
+def detect_language(text: str) -> str:
+    """
+    'bn' when Bengali-script codepoints dominate, else 'en' (Banglish \
+    is Latin-script and treated as 'en' for Part A; chat prompt rules \
+    handle mirroring it).
+    """
+    t = text or ""
+    if not t:
+        return "en"
+    bengali = len(_BENGALI_RE.findall(t))
+    if bengali and bengali >= max(2, int(0.15 * len(t))):
+        return "bn"
+    return "en"
 _DECISION_SCHEMA = {
     "type": "object",
     "properties": {

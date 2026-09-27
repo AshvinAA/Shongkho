@@ -70,6 +70,19 @@ def _cases():
         dict(id="q15", kind="data", domain="sales",
              q=f"What were total sales between {week_ago} and {today}?"),
         dict(id="q16", kind="out_of_scope", q="Who won the last world cup?"),
+        # ---- Bangla / Banglish cases (docs/PROTIK_BANGLA_PLAN.md §7) ----
+        dict(id="q17", kind="data", domain="sales", lang="auto",
+             q="আজ বিক্রি কেমন হয়েছে?"),          # Bangla script in
+        dict(id="q18", kind="conversation", lang="auto",
+             q="kemon acho?"),                        # Banglish greeting
+        dict(id="q19", kind="data", domain="sales", lang="bn",
+             q="How are sales today?"),               # English in, Bangla OUT
+        dict(id="q20", kind="out_of_scope", lang="auto",
+             q="আগামী মাসে বিক্রি কত হবে?"),      # Bangla prediction
+        dict(id="q21", kind="conversation", lang="bn",
+             q="আপনি কে?"),                        # who are you (bn forced)
+        dict(id="q22", kind="data", domain="sales", lang="auto",
+             q="এই সপ্তাহে বিক্রি কেমন ছিল?"),    # Banglish date-range flavor
     ]
 
 
@@ -87,6 +100,22 @@ def _judge(case, out, elapsed):
 
     def warn(text):
         reasons.append(text)
+
+    # Expected-language heuristic (plan §7): Bengali unicode presence.
+    # bn force MUST produce Bangla script and never leak an English
+    # fallback line; auto mirrors Bangla-script questions (warn-only,
+    # deterministic redirects keep their table language).
+    if case.get("lang") == "bn":
+        if not re.search(r"[\u0980-\u09FF]", msg):
+            fail("bn forced but the reply has no Bangla script")
+        if re.search(r"(I can't predict|rephrasing|co-pilot|store data)",
+                     msg, re.I):
+            fail("English fallback leaked under bn force")
+    elif (case.get("lang") == "auto" and not case["q"].isascii()
+            and case["kind"] == "data"
+            and not re.search(r"[\u0980-\u09FF]", msg)
+            and not meta.get("fallback_reason")):
+        warn("Bangla-in data question answered without Bangla script")
 
     if _ECHO_RE.search(msg):
         fail("example-echo shipped as the answer")
@@ -154,6 +183,9 @@ def main():
                     help="seconds to sleep between questions — keep the "
                          "run under a remote free-tier RPM (Gemini flash-lite "
                          "quota is 15/min; use --gap 5..12)")
+    ap.add_argument("--lang", default=None, choices=("auto", "bn", "en"),
+                    help="default language mode for cases without their "
+                         "own (plan §7); a case's lang key wins")
     args = ap.parse_args()
 
     cases = _cases()
@@ -169,19 +201,30 @@ def main():
     with tempfile.TemporaryDirectory(
             ignore_cleanup_errors=True) as tmp:
         db = _seed(tmp)
+        # The daily cap is a PRODUCT guard (20/day in the app), not an
+        # eval gate: a 22-question battery trips it and the tail cases
+        # die as DailyCapReached FAILs (live: q21/q22). Raise it for the
+        # battery's scratch store — real deployments keep the default.
+        assistant.DAILY_CAP = max(assistant.DAILY_CAP, len(cases) + 5)
         fails = warns = 0
+        # Per-language tallies — the plan §7 eval gates, one line each.
+        by_lang = {}
         for i, case in enumerate(cases):
             if args.gap > 0 and i > 0:
                 time.sleep(args.gap)
             t0 = time.monotonic()
             try:
-                out = assistant.handle_message(db, 1, case["q"])
+                out = assistant.handle_message(
+                    db, 1, case["q"],
+                    language=case.get("lang") or args.lang)
                 err = None
             except (assistant.DailyCapReached,
                     assistant.AssistantUnavailable) as exc:
                 out, err = None, str(exc)
             elapsed = time.monotonic() - t0
-            print(f"\n=== {case['id']} [{case['kind']}] {case['q']!r}")
+            print(f"\n=== {case['id']} [{case['kind']}"
+                  f"{('/' + (case.get('lang') or args.lang or 'auto'))}]"
+                  f" {case['q']!r}")
             if err:
                 print(f"    !! ERROR: {err}")
                 fails += 1
@@ -195,11 +238,26 @@ def main():
                 fails += 1
             elif reasons:
                 warns += 1
+            lang_key = case.get("lang") or args.lang or "auto"
+            tally = by_lang.setdefault(
+                lang_key, {"PASS": 0, "FAIL": 0, "warn": 0})
+            if status == "FAIL":
+                tally["FAIL"] += 1
+            elif reasons:
+                tally["warn"] += 1
+            else:
+                tally["PASS"] += 1
             tag = status if status == "PASS" else \
                 f"{status} ({'; '.join(reasons)})"
             print(f"    -> {tag}  [{elapsed:.0f}s]")
         print(f"\n===== {len(cases)} questions: "
               f"{fails} FAIL, {warns} warn =====")
+        if by_lang:
+            print("per-language eval gates (plan §7):")
+            for lang_key in sorted(by_lang):
+                t = by_lang[lang_key]
+                print(f"  {lang_key:>5}: {t['PASS']} PASS, "
+                      f"{t['FAIL']} FAIL, {t['warn']} warn")
         return 1 if fails else 0
 
 

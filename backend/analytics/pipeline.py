@@ -195,6 +195,31 @@ def _execute_run(db: Session, run, period: str) -> None:
     # failure degrades to a flagged fallback and the run still completes.
     insights_payload = insights.build_insights(bundle, period)
 
+    # 'bn' companion snapshot (docs/PROTIK_BANGLA_PLAN.md §4): when the
+    # owner's persisted mode is Bangla, one extra LLM call stores the
+    # Bangla commentary alongside the English one so the switch serves
+    # the right cache instantly. Its own SECTION key ('insights_bn')
+    # because analytics_snapshots is UNIQUE(run_id, section,
+    # period_type) — two insights rows per run are impossible. Degrades
+    # silently: Part A never fails the run, and the dashboard's bn
+    # lookup falls back to the English snapshot honestly.
+    owner_language = (db.query(models.Owner)
+                      .filter(models.Owner.user_id == run.owner_id)
+                      .first())
+    owner_language = getattr(owner_language, "assistant_language", None)
+    rows_extra = []
+    if owner_language == "bn":
+        try:
+            bn_payload = insights.build_insights(bundle, period, language="bn")
+            rows_extra = [models.AnalyticsSnapshot(
+                run_id=run.id, owner_id=run.owner_id,
+                section="insights_bn", period_type=period,
+                data=bn_payload, generated_at=datetime.utcnow(),
+            )]
+        except Exception as exc:  # noqa: BLE001 - best-effort companion
+            print(f"[pipeline] bn insights snapshot skipped: {exc}")
+            rows_extra = []
+
     # ---- snapshot writes: all sections in ONE transaction ----
     # All four payloads are fully computed above; the single tx publishes
     # them atomically. (Stage-1 placeholder removed: the LLM now supplies
@@ -222,8 +247,8 @@ def _execute_run(db: Session, run, period: str) -> None:
             data=insights_payload, generated_at=now,
         ),
     ]
-    db.add_all(rows)
-    db.commit()  # all four visible or none — never mixed stale/fresh
+    db.add_all(rows + (rows_extra if owner_language == "bn" else []))
+    db.commit()  # all sections visible or none — never mixed stale/fresh
 
     run.status = "COMPLETED"
     run.completed_at = datetime.utcnow()

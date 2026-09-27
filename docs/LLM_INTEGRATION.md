@@ -725,3 +725,87 @@ timeout burst eating the 30s budget — budget-ceiling behavior working
 as designed, not a 429; suite 247 green incl. 4 new regressions:
 short-429 wait+retry, long-429 immediate degrade, single-wait-per-turn,
 prediction-redirect priority).
+
+### 19. The Protik language switch — Bangla / Banglish (2026-09-28)
+
+Full implementation of `docs/PROTIK_BANGLA_PLAN.md` (§6 steps 1–5).
+Design decision unchanged from the plan: **translate at the model**
+(native bilingual generation), never an MT layer — double translation
+compounds grounding drift, and all gates (digits, name matching) are
+language-agnostic by construction.
+
+**Mode model.** `owners.assistant_language` ∈ `auto | bn | en`
+(lightweight column migration in `database._ensure_columns`), persisted
+via `PUT /auth/me/preferences`, surfaced on `GET /auth/me`. The chat
+request carries an optional `language` field (per-turn override; the
+UI's switch state); `handle_message` resolves request > persisted >
+`auto`. Telemetry: `meta.language_mode`, `meta.detected_language`.
+
+**Prompt side.** `CHAT_SYSTEM_PROMPT` gains the LANGUAGE rule and the
+context carries `force_language` + `message_language`. `auto` mirrors
+the owner's language (Bangla script, Banglish, or English); `bn`
+forces Bangla prose even on English questions. Names stay
+original-script; digits stay Western.
+
+**Part A in Bangla.** `insights.build_insights(..., language='bn')`
+appends the language directive to `_prompt`; the JSON contract is
+unchanged (only summary/observation VALUES come back Bangla). Snapshots
+carry their `language`. Because `analytics_snapshots` is
+UNIQUE(run_id, section, period_type), the Bangla commentary is its own
+SECTION (`insights_bn`), written alongside `insights` when the owner's
+persisted mode is `bn` (best-effort — never fails the run).
+`GET /analytics/dashboard?language=bn` serves `insights_bn` when
+present, else the English snapshot with an honest `missing_language:
+"bn"` marker — no live LLM call, no half-finished rerun. The internal
+`insights_bn` key never leaks on plain requests.
+
+**Deterministic layer speaks Bangla too (bn force).** Fixed fallbacks
+(`FALLBACK_MESSAGE_BN`, `NARRATION_FALLBACK_BN`, refusals,
+`CONVERSATION_FALLBACK_BN`, `PREDICTION_REDIRECT_BN`, …) swap in via an
+exact-match table post-loop — only DETERMINISTIC text is localized,
+never model prose. `_synth_answer` grows parallel Bangla templates
+(numbers verbatim → checker-safe). A Bangla echo-shield variant
+(`_ECHO_PHRASE_BN_RE`) guards the Bangla canned lines.
+
+**Shields go bilingual.** `_CONVERSATION_ASK_RE`, `_PREDICTION_RE`,
+`_WORLD_KNOWLEDGE_RE`, and `_DOMAIN_HINTS` gain Bangla-script and
+Banglish (romanized) triggers — "kemon acho", "আবহাওয়া",
+"আগামী মাসে বিক্রি কত হবে", "bikri", "kormochari", "ponno". Two traps
+fixed live:
+
+ - *Python `\b` is wrong around Bengali words ending in combining
+   vowel signs* (ি ে ো are Mn/Mc, not `\w`, so the trailing boundary
+   never matches). All Bangla-script alternatives use Bengali-block
+   lookarounds `(?<![\u0980-\u09FF])…(?![\u0980-\u09FF])` instead.
+ - *Prediction-shaped Bangla asks classify as `sales`* (the বিক্রি
+   hint fires), which previously triggered fetch-first on a refusal.
+   The fetch-first rescue now skips prediction-shaped questions —
+   the redirect is the designed answer regardless of language.
+
+**Bengali numerals (plan §8 risk, live-verified).** Despite the prompt
+rule, gemini-3.5-flash-lite writes ১৩৫০ in Bangla prose. Python `\d`
+matches Bengali digits (Unicode decimal), so the checker and the
+conversation digits-gate DO see them — no vacuous pass, but good
+replies were being replaced. `_normalize_bn_numerals` now
+transliterates ০-৯ → 0-9 on every shipped reply before the
+shipped-grounded invariant.
+
+**Evaluation.** Battery extended to 22 cases: q17 Bangla script in,
+q18 Banglish greeting, q19 English-in with `bn` force, q20 Bangla
+prediction → redirect, q21 identity in Bangla, q22 Banglish date
+range; `--lang` pins a default mode; per-language eval gates
+(PASS/FAIL/warn × auto/bn/en) print with the summary; expected-language
+judge (Bengali unicode presence) fails `bn`-forced runs that answer
+without Bangla script or leak an English fallback line. The battery
+now raises `DAILY_CAP` for its own scratch store — 22 questions trip
+the product's 20/day cap and the tail cases die as false FAILs.
+Full run: **22/22 PASS** on gemini-3.5-flash-lite.
+
+**Frontend.** `AUTO | বাংলা | EN` segmented switch on /protik
+(persisted per owner, session-live), language on every `sendChat` and
+`getDashboard`, Bangla suggestion chips + full panel i18n (thinking,
+429 cap, 503, placeholder) under `bn`, period/run controls relabel,
+`lang="bn"` on the hero, Noto Sans Bengali webfont in the app stack.
+Receipts/POS stay English (plan §8 open question, decided). Tests:
+`tests/test_language.py` (backend), `ProtikLanguage.test.jsx`
+(frontend) — suite 300 backend / 41 frontend.

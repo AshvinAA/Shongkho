@@ -28,7 +28,8 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'Noto Sans Bengali', 'Noto Sans', sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 15px;
@@ -1943,4 +1944,106 @@ form .modal-footer {
 
 tr.row-active {
   background: var(--bg, #f3f4f6);
+}
+
+/* =========================================================
+   Protik (প্রতীক) — AI co-pilot tab
+   ========================================================= */
+.protik-bangla {
+  font-weight: 400;
+  font-size: 0.6em;
+  opacity: 0.75;
+}
+
+.protik-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.protik-hero {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 400px at 20% -10%,
+      rgba(37, 99, 235, 0.08), transparent),
+    var(--bg, #f8fafc);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  padding: 2rem 2.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.protik-hero-inner {
+  max-width: 72rem;
+}
+
+.protik-hero-summary {
+  font-size: clamp(1.8rem, 4.2vw, 3.4rem);
+  line-height: 1.18;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+  color: var(--text, #0f172a);
+}
+
+.protik-hero-points {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 1.15rem;
+  color: var(--text, #0f172a);
+}
+
+.protik-hero-points li::before {
+  content: '→ ';
+  color: var(--primary, #2563eb);
+  font-weight: 700;
+}
+
+.protik-hero-watch {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.protik-hero-stamp {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.protik-refreshing {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+}
+
+.protik-chat-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.protik-chat-section .assistant-panel {
+  height: 520px;
+}
+
+@media (min-width: 900px) {
+  .protik-page {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* ---- Protik language switch (docs/PROTIK_BANGLA_PLAN.md §5) ---- */
+/* Bangla hero chrome: Noto Sans Bengali via the browser font stack. */
+.protik-hero[lang="bn"] .protik-hero-summary {
+  line-height: 1.35;
+}
+.protik-hero-lang-note {
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
 }

@@ -1,4 +1,4 @@
-import { get, post } from './client.js'
+import { get, post, put } from './client.js'
 
 /** Login with phone + password. Sets the session cookie. */
 export function login(credentials) {
@@ -41,4 +41,12 @@ export function forgotPassword(phoneNumber) {
 /** Step 2 of password reset — set the new password. */
 export function resetPassword(phoneNumber, newPassword) {
   return post('/auth/reset-password', { phone_number: phoneNumber, new_password: newPassword })
+}
+
+/**
+ * Owner-only: persist UI preferences (docs/PROTIK_BANGLA_PLAN.md §5).
+ * assistantLanguage: 'auto' | 'bn' | 'en' — Protik's language mode.
+ */
+export function updateMyPreferences({ assistantLanguage }) {
+  return put('/auth/me/preferences', { assistant_language: assistantLanguage })
 }

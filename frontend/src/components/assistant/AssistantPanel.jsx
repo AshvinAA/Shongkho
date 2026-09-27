@@ -8,6 +8,13 @@ const SUGGESTIONS = [
   'Which product should we push more this week?',
 ]
 
+// Bangla suggestion chips — shown when the switch forces বাংলা (plan §5).
+const SUGGESTIONS_BN = [
+  'এই সপ্তাহে কোন পণ্য বেশি চাপ দেওয়া উচিত?',
+  'আজ কে সবচেয়ে ভালো বিক্রি করেছে?',
+  'লাভ বাড়াতে কী করব?',
+]
+
 /**
  * Conversational business assistant (Part B) — TEXT-ONLY by design.
  *
@@ -15,18 +22,41 @@ const SUGGESTIONS = [
  * answers with grounded advice, arguments and alternatives in prose.
  * Charts live on the dashboard above; the chat never renders graphs.
  *
- * Each turn POSTs /analytics/chat; history reloads on mount so the
- * conversation survives refreshes (persistence in assistant_messages).
- * Error contract is honest: 429 (daily cap) and 503 (not configured)
- * surface as system notes; the input re-enables either way.
+ * Each turn POSTs /analytics/chat with the current language mode
+ * (plan §1: 'auto' mirrors the message, 'bn' forces Bangla); history
+ * reloads on mount so the conversation survives refreshes (persistence
+ * in assistant_messages). Error contract is honest: 429 (daily cap)
+ * and 503 (not configured) surface as system notes; the input
+ * re-enables either way.
  */
-export default function AssistantPanel() {
+export default function AssistantPanel({ language = 'auto' } = {}) {
   const { user } = useAuth()
   const [history, setHistory] = useState([])   // [{role, message}]
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const scrollRef = useRef(null)
+
+  const forceBn = language === 'bn'
+  const suggestions = forceBn ? SUGGESTIONS_BN : SUGGESTIONS
+
+  // UX strings follow the switch so the whole panel feels Bangla, not
+  // just the model output (docs/PROTIK_BANGLA_PLAN.md §3 i18n note).
+  const t = forceBn ? {
+    empty: 'দোকান নিয়ে জিজ্ঞেস করুন — আমি সংখ্যা তুলে এনে পরামর্শ, বিকল্প আর প্রয়োজনে সৎ আপত্তি দেব।',
+    grounded: 'আমি যেকোনো সংখ্যা সরাসরি আপনার দোকানের ডেটা থেকে বলি — কিছু বানাই না, আর ডেটা উত্তর না দিলে সৎভাবে বলি।',
+    thinking: 'প্রতীক ভাবছে…',
+    cap429: 'আজকের সব প্রশ্ন শেষ — কাউন্টার মধ্যরাত (UTC) এ রিসেট হবে।',
+    not503: 'এই সার্ভারে প্রতীক এখনো কনফিগার করা হয়নি।',
+    placeholder: 'বাংলায় বা ইংরেজিতে জিজ্ঞেস করুন…',
+  } : {
+    empty: "Ask me about your store — I'll pull the numbers and give you advice, alternatives, and honest pushback when a plan looks risky.",
+    grounded: "Every number I quote comes straight from your store data — I won't invent figures, and I'll say so when the data can't answer something.",
+    thinking: 'Protik is thinking…',
+    cap429: null,
+    not503: null,
+    placeholder: null,
+  }
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => {
@@ -56,14 +86,14 @@ export default function AssistantPanel() {
     setBusy(true)
     scrollToEnd()
     try {
-      const out = await sendChat(message)
+      const out = await sendChat(message, language)
       setHistory((h) => [...h, { role: 'assistant', message: out.message }])
     } catch (e) {
       setNote(
         e.status === 429
-          ? "You've used all your assistant messages for today — the counter resets at midnight UTC."
+          ? (t.cap429 || "You've used all your assistant messages for today — the counter resets at midnight UTC.")
           : e.status === 503
-            ? 'The assistant is not configured on this server.'
+            ? (t.not503 || 'The assistant is not configured on this server.')
             : e.message
       )
     } finally {
@@ -77,36 +107,28 @@ export default function AssistantPanel() {
       <div className="assistant-scroll" ref={scrollRef}>
         {history.length === 0 && (
           <div className="assistant-empty muted">
-            <p>
-              Ask me about your store — I'll pull the numbers and give you
-              advice, alternatives, and honest pushback when a plan looks
-              risky.
-            </p>
+            <p>{t.empty}</p>
             <div className="assistant-suggestions">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button key={s} type="button" className="btn btn-outline"
                         disabled={busy} onClick={() => send(s)}>
                   {s}
                 </button>
               ))}
             </div>
-            <p className="card-sub muted">
-              Every number I quote comes straight from your store data —
-              I won't invent figures, and I'll say so when the data can't
-              answer something.
-            </p>
+            <p className="card-sub muted">{t.grounded}</p>
           </div>
         )}
 
         {history.map((turn, i) => (
           <div key={i} className={`assistant-turn assistant-${turn.role}`}>
             <span className="assistant-who muted">
-              {turn.role === 'user' ? (user?.name || 'You') : 'Assistant'}
+              {turn.role === 'user' ? (user?.name || 'You') : 'Protik প্রতীক'}
             </span>
             <p className="assistant-msg">{turn.message}</p>
           </div>
         ))}
-        {busy && <p className="muted assistant-typing">Assistant is thinking…</p>}
+        {busy && <p className="muted assistant-typing">{t.thinking}</p>}
         {note && <div className="alert alert-error">{note}</div>}
       </div>
 
@@ -114,9 +136,9 @@ export default function AssistantPanel() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask for advice — pricing, staffing, what to push…"
+          placeholder={t.placeholder || 'Ask for advice — pricing, staffing, what to push…'}
           disabled={busy}
-          aria-label="Message the analytics assistant"
+          aria-label="Message Protik"
         />
         <button type="submit" className="btn" disabled={busy || !input.trim()}>
           {busy ? '…' : 'Send'}
