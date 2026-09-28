@@ -6,7 +6,6 @@ import {
   Receipt,
   Users,
   MessageCircle,
-  Sparkles,
   UserCog,
   ChartColumn,
   PanelLeftClose,
@@ -14,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import Logo from '../Logo.jsx'
+import ProtikMark from '../assistant/ProtikMark.jsx'
 
 /**
  * Left sidebar — role-based navigation, collapsible to icon rail, active
@@ -39,7 +39,7 @@ const OWNER_SECTIONS = [
     heading: 'Insights',
     items: [
       { to: '/analytics', label: 'Analytics', icon: ChartColumn },
-      { to: '/protik', label: 'Protik প্রতীক', icon: Sparkles },
+      { to: '/protik', label: 'Protik প্রতীক', icon: ProtikMark },
     ],
   },
 ]
@@ -95,7 +95,7 @@ export default function Sidebar({ role, collapsed, onToggleCollapsed, mobileOpen
                     className={({ isActive }) => `shell-nav-link${isActive ? ' shell-nav-active' : ''}`}
                     onClick={onCloseMobile}
                   >
-                    <Icon size={18} aria-hidden="true" />
+                    <Icon size={18} aria-hidden={item.icon === ProtikMark ? undefined : "true"} />
                     <span className="shell-nav-label">{item.label}</span>
                   </NavLink>
                 )

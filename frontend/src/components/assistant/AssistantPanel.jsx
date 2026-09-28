@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Sparkles } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getChatHistory, sendChat } from '../../api/assistant.js'
 import { PROTIK } from './identity.js'
+import ProtikMark from './ProtikMark.jsx'
 import { Button } from '../ui/index.jsx'
 import Avatar from '../Avatar.jsx'
 
@@ -127,7 +127,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
   return (
     <div className="assistant-panel advisor-panel">
       <div className="advisor-head">
-        <Avatar user={{ name: `${PROTIK.name} ${PROTIK.nameBn}` }} size="md" className="advisor-avatar" />
+        <ProtikMark size={38} className="advisor-avatar protik-avatar" />
         <div className="advisor-head-text">
           <strong>{PROTIK.name} <span className="protik-bangla">{PROTIK.nameBn}</span></strong>
           <span className="muted">{forceBn ? PROTIK.taglineBn : PROTIK.tagline}</span>
@@ -160,7 +160,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
               ))}
             </div>
             <p className="card-sub muted advisor-grounded">
-              <Sparkles size={13} aria-hidden="true" /> {t.grounded}
+              <ProtikMark size={13} className="advisor-spark-mark" aria-hidden="true" /> {t.grounded}
             </p>
           </div>
         )}
@@ -175,7 +175,7 @@ export default function AssistantPanel({ language = 'auto' } = {}) {
         ))}
         {busy && (
           <p className="muted assistant-typing" role="status">
-            <Sparkles size={13} className="advisor-spark" aria-hidden="true" /> {t.thinking}
+            <ProtikMark size={13} className="advisor-spark-mark advisor-spark" aria-hidden="true" /> {t.thinking}
           </p>
         )}
         {note && (

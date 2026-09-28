@@ -1974,3 +1974,18 @@ button.inv-card:focus-visible {
   flex-shrink: 0;
   color: var(--brand-600);
 }
+
+/* Protik advisor mark (Bengali প + insight spark) */
+.protik-mark-bg { fill: var(--brand-600); }
+.protik-mark-glyph {
+  fill: var(--on-brand);
+  font-family: 'Noto Sans Bengali', 'Inter', sans-serif;
+}
+.protik-mark-spark { fill: var(--color-orders); }
+.advisor-avatar.protik-avatar {
+  flex-shrink: 0;
+  filter: drop-shadow(var(--shadow-1));
+}
+.advisor-spark-mark {
+  vertical-align: -2px;
+}
