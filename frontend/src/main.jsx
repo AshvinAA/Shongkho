@@ -6,7 +6,6 @@ import App from './App.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import { RoleGate } from './components/RoleGate.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
-import Navbar from './components/Navbar.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -21,7 +20,6 @@ import Analytics from './pages/Analytics.jsx'
 import Protik from './pages/Protik.jsx'
 import './styles.css'
 import './styles.ui.css'
-
 const router = createBrowserRouter([
   {
     path: '/login',
