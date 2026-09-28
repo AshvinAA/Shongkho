@@ -77,3 +77,35 @@ Assistant responses are **text-only**: `{message, tool_calls, meta}` — there a
 ## 7. Baseline verification
 
 - `npx vitest run` → **41 passed** · `npm run build` → green.
+
+## 8. Phase 7 verification report (post-redesign)
+
+**Gates:** `npx vitest run` → **41/41 passed** (5 files) · `npm run build` → green · no lint script exists in package.json (unchanged; build+tests are the project's gates).
+
+### (a) Hardcoded-value grep proof
+
+- `styles.css`: 45 hex matches — **all inside `:root` as token definitions** (brand ramp, semantic roles, chart palette). Zero in rule bodies.
+- `styles.ui.css` (design-system layer): **0 hex literals**. Consumes `var(--…)` only.
+- Remaining inline `style={{…}}` in JSX — **functional only, no visual styling**:
+  - `Inventory.jsx` / `PhotoUpload.jsx` — `display:'none'` on hidden file inputs
+  - `SalesTrend.jsx` / `TopProducts.jsx` / `EmployeeRace.jsx` — bar `width:%` and swatch `background` computed **from data via `chartPalette.js` tokens** (SVG/data can't be a static class)
+
+### (b) Conversion ledger
+
+| Screen | Status |
+|---|---|
+| POS `/` | ✅ Phase 3 — two-pane register, shortcuts, sticky cart |
+| Analytics `/analytics` | ✅ Phase 4 — KPI strip, BI chart/table, race |
+| Protik `/protik` | ✅ Phase 5 — BI hero + advisor panel |
+| Inventory `/inventory` | ✅ Phase 6 — tiles→BI cards, Drawer forms |
+| Staff `/staff` | ✅ Phase 6 — DataTable roster, Tabs, Drawers |
+| Dashboard, Login, Register, Profile, Sales, Customers, Chat | ✅ Phases 1–2 token rebrand via shell + legacy aliases; token-clean CSS |
+| App shell | ✅ Phase 2 — Sidebar/Topbar replace Navbar; role-based nav |
+
+**Legacy leftovers:** none — no screen remains on pre-token styling. Known cosmetic debt (deferred, non-blocking): legacy `styles.css` still carries some pre-redesign selectors (e.g. `.stat-card`, chat rules) kept for classes screens still reference; they are token-based now.
+
+### (c) Structural wins
+
+- One `src/components/ui/` library (Button, Input/Select/Textarea, Field, SegmentedControl, Tabs, Modal/Drawer, Card, Badge, DeltaChip, StatCard, DataTable, Skeleton, EmptyState, ErrorState, Toast, Avatar) — every primitive with hover/focus-visible/disabled/loading.
+- Advisor identity in ONE constant (`components/assistant/identity.js`).
+- Dark-theme-ready: all surfaces/text/borders/deltas flow from `:root` variables.
