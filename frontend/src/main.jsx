@@ -20,6 +20,7 @@ import Profile from './pages/Profile.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Protik from './pages/Protik.jsx'
 import './styles.css'
+import './styles.ui.css'
 
 const router = createBrowserRouter([
   {
