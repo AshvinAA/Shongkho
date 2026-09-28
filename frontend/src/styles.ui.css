@@ -1561,3 +1561,154 @@
     display: none;
   }
 }
+
+/* ============================================================
+   Phase 5 — Protik hero + advisor chat panel
+   ============================================================ */
+.protik-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.protik-hero {
+  background:
+    radial-gradient(1200px 400px at 110% -50%, var(--brand-50), transparent 60%),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  min-height: 320px;
+}
+.protik-lang-note {
+  margin-bottom: var(--space-3);
+}
+.protik-points {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.protik-point {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+.protik-point-marker {
+  color: var(--brand-600);
+  flex-shrink: 0;
+}
+.protik-watch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.protik-watch-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+.protik-watch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.protik-hero-stamp {
+  font-size: var(--text-xs);
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.protik-chat-section .advisor-panel {
+  position: sticky;
+  top: calc(60px + var(--space-4));
+  height: calc(100vh - 60px - 3rem);
+  max-height: 720px;
+}
+.advisor-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.advisor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--brand-50);
+}
+.advisor-head-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.advisor-head-text strong {
+  font-size: var(--text-sm);
+}
+.advisor-head-text .muted {
+  font-size: var(--text-xs);
+}
+.advisor-cap {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.advisor-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: var(--space-2) var(--space-4);
+  min-height: 44px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.advisor-chip:hover:not(:disabled) {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+}
+.advisor-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.advisor-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.advisor-grounded {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.advisor-spark {
+  animation: ui-pulse 1.2s ease infinite;
+}
+@keyframes ui-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+.advisor-note {
+  margin: var(--space-2) var(--space-4);
+}
+@media (max-width: 1100px) {
+  .protik-layout {
+    grid-template-columns: 1fr;
+  }
+  .protik-chat-section .advisor-panel {
+    position: static;
+    height: auto;
+    max-height: 560px;
+  }
+}
