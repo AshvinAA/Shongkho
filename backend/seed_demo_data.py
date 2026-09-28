@@ -32,6 +32,7 @@ import argparse
 import random
 import sys
 import os
+import time as _time
 import urllib.request
 from datetime import date, datetime, time, timedelta
 
@@ -115,34 +116,35 @@ PORTRAITS = {
 AVATAR_DIR = os.path.join(BASE_DIR, "static", "avatars")
 PRODUCT_IMG_DIR = os.path.join(BASE_DIR, "static", "products")
 
-# Per-product photo source: one or two keywords that pick a fitting real
-# photo (loremflickr keyword service, deterministic via ?lock=). The file
-# is cached under backend/static/products/ so it only downloads once.
+# Per-product photo source: a Wikimedia Commons search term. The best
+# JPEG/PNG hit is downloaded once into backend/static/products/ and the
+# product.photo points at the /static URL. Falls back to a generated
+# category-colored tile when offline or when nothing sensible is found.
 PRODUCT_PHOTOS = {
-    "Mustard Oil 1L":       "mustard,oil",
-    "Miniket Rice 5kg":     "rice",
+    "Mustard Oil 1L":       "mustard oil bottle",
+    "Miniket Rice 5kg":     "white rice",
     "Sugar 1kg":            "sugar",
-    "Atta 2kg":             "flour,wheat",
+    "Atta 2kg":             "wheat flour",
     "Lentils 1kg":          "lentils",
-    "Cold Drink 250ml":     "soda,bottle",
-    "Mango Juice 1L":       "mango,juice",
-    "Tea Leaves 200g":      "tea",
-    "Instant Noodles":      "noodles",
+    "Cold Drink 250ml":     "soda bottle",
+    "Mango Juice 1L":       "mango juice",
+    "Tea Leaves 200g":      "tea leaves",
+    "Instant Noodles":      "instant noodles",
     "Biscuits (family)":    "biscuits",
-    "Soap Bar":             "soap",
-    "Shampoo Sachet x12":   "shampoo",
-    "Soybean Oil 5L":       "cooking,oil",
-    "Milk Powder 500g":     "milk",
-    "Ghee 500g":            "butter,ghee",
-    "Rolled Oats 400g":     "oats",
-    "Turmeric Powder 200g": "turmeric,spice",
-    "Chili Powder 200g":    "chili,spice",
-    "Coriander Seeds 100g": "coriander,spice",
-    "Puffed Rice 500g":     "rice,snack",
-    "Chanachur 350g":       "snack,food",
-    "Chocolate Bar":        "chocolate",
-    "Energy Drink 250ml":   "energy,drink",
-    "Mineral Water 1L":     "water,bottle",
+    "Soap Bar":             "soap bar",
+    "Shampoo Sachet x12":   "shampoo bottle",
+    "Soybean Oil 5L":       "soybean oil",
+    "Milk Powder 500g":     "milk powder",
+    "Ghee 500g":            "ghee",
+    "Rolled Oats 400g":     "rolled oats",
+    "Turmeric Powder 200g": "turmeric powder",
+    "Chili Powder 200g":    "chili powder",
+    "Coriander Seeds 100g": "coriander seeds",
+    "Puffed Rice 500g":     "puffed rice",
+    "Chanachur 350g":       "snack mix",
+    "Chocolate Bar":        "chocolate bar",
+    "Energy Drink 250ml":   "energy drink",
+    "Mineral Water 1L":     "mineral water bottle",
 }
 
 # Category-colored fallback tiles (used when a download fails offline)
@@ -186,37 +188,68 @@ def _fallback_tile(name: str, category: str) -> str:
     return "data:image/svg+xml;utf8," + svg.replace("<", "%3C").replace(">", "%3E").replace("#", "%23").replace(" ", "%20")
 
 
+def _commons_image_url(term: str, width: int = 480):
+    """Best JPEG/PNG thumbnail URL from a Wikimedia Commons search."""
+    import json
+    import urllib.parse
+
+    params = urllib.parse.urlencode({
+        "action": "query", "format": "json", "generator": "search",
+        "gsrnamespace": "6", "gsrsearch": term, "gsrlimit": "4",
+        "prop": "imageinfo", "iiprop": "url|mime", "iiurlwidth": str(width),
+    })
+    url = f"https://commons.wikimedia.org/w/api.php?{params}"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "ShongkhoDemoSeeder/1.0 (demo data)"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        data = json.load(resp)
+    for page in (data.get("query") or {}).get("pages", {}).values():
+        for info in page.get("imageinfo", []):
+            if info.get("mime") in ("image/jpeg", "image/png"):
+                return info.get("thumburl") or info.get("url")
+    return None
+
+
 def _refresh_product_photos(db) -> None:
     """
-    Give every product a photo: download once into static/products/ and
-    point products.photo at the /static URL. Falls back to a generated
-    category-colored tile when the network is unavailable.
+    Give every product a photo: search Wikimedia Commons once, cache the
+    download in static/products/, and point products.photo at the /static
+    URL. Falls back to a generated category-colored tile when the network
+    is unavailable or the search finds nothing usable.
     """
     os.makedirs(PRODUCT_IMG_DIR, exist_ok=True)
-    updated = 0
+    updated = real = 0
     for row in db.query(models.Product).all():
         if row.photo and str(row.photo).startswith("/static/products/"):
             continue  # already has a seeded photo
-        keywords = PRODUCT_PHOTOS.get(row.product_name)
+        term = PRODUCT_PHOTOS.get(row.product_name)
         slug = _slugify(row.product_name)
         dest = os.path.join(PRODUCT_IMG_DIR, f"{slug}.jpg")
-        if keywords and not os.path.exists(dest):
+        # a cached file that isn't a real image (error page etc.) gets retried
+        if os.path.exists(dest) and not _valid_image(dest):
+            os.remove(dest)
+        if term and not os.path.exists(dest):
             try:
-                url = f"https://loremflickr.com/480/480/{keywords}?lock={row.product_id}"
-                req = urllib.request.Request(
-                    url, headers={"User-Agent": "Mozilla/5.0 (Shongkho demo seeder)"},
-                )
-                with urllib.request.urlopen(req, timeout=20) as resp, open(dest, "wb") as out:
-                    out.write(resp.read())
+                src = _commons_image_url(term)
+                _time.sleep(1.0)  # be polite to the Commons API (rate limits)
+                if src:
+                    req = urllib.request.Request(
+                        src, headers={"User-Agent": "ShongkhoDemoSeeder/1.0 (demo data)"},
+                    )
+                    with urllib.request.urlopen(req, timeout=25) as resp, open(dest, "wb") as out:
+                        out.write(resp.read())
+                    _time.sleep(1.0)
             except Exception as exc:  # noqa: BLE001 — offline must not crash seeding
                 print(f"  photo unavailable for {row.product_name} ({exc.__class__.__name__})")
         if os.path.exists(dest) and _valid_image(dest):
             row.photo = f"/static/products/{slug}.jpg"
+            real += 1
         else:
             row.photo = _fallback_tile(row.product_name, row.category)
         updated += 1
     db.commit()
-    print(f"Product photos: {updated} assigned (real downloads + fallback tiles)")
+    print(f"Product photos: {updated} assigned ({real} real downloads, {updated - real} fallback tiles)")
 
 
 def _ensure_portraits() -> dict:
@@ -359,6 +392,9 @@ def seed(force: bool = False) -> None:
             db.flush()
         products.append((row, spec))
     print(f"Products: {len(products)}")
+
+    # Product photos: real keyword-matched downloads with offline fallback
+    _refresh_product_photos(db)
 
     # -----------------------------------------------------------
     # Customers: a regular pool + walk-ins
