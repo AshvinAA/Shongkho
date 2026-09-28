@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { PackageSearch, Pencil, Plus, Search } from 'lucide-react'
 import * as productsApi from '../api/products.js'
 import * as uploadsApi from '../api/uploads.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { RoleGate } from '../components/RoleGate.jsx'
-import Modal from '../components/Modal.jsx'
-import Avatar from '../components/Avatar.jsx'
 import CategoryInput from '../components/CategoryInput.jsx'
 import { fmtMoney, fmtDate } from '../utils/format.js'
+import {
+  Badge,
+  Button,
+  Card,
+  Drawer,
+  EmptyState,
+  ErrorState,
+  Input,
+  Modal,
+  Select,
+  Skeleton,
+} from '../components/ui/index.jsx'
 
 const LOW_STOCK_THRESHOLD = 5
 
@@ -19,7 +30,19 @@ const EMPTY_FORM = {
   supplier_name: '',
 }
 
-/** Inventory management: photo tile grid, detail pop-out, owner add/edit/delete. */
+function stockTone(qty) {
+  if (qty === 0) return 'danger'
+  if (qty <= LOW_STOCK_THRESHOLD) return 'warning'
+  return 'success'
+}
+
+function stockText(qty) {
+  if (qty === 0) return 'Out of stock'
+  if (qty <= LOW_STOCK_THRESHOLD) return `Low · ${qty} left`
+  return `${qty} in stock`
+}
+
+/** Inventory management: photo tile grid, detail drawer, owner add/edit/delete. */
 export default function Inventory() {
   const { user } = useAuth()
   const isOwner = user?.role === 'owner'
@@ -34,10 +57,10 @@ export default function Inventory() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
 
-  // ------------------------------------------------ detail pop-out
+  // ------------------------------------------------ detail drawer
   const [detailProduct, setDetailProduct] = useState(null)
 
-  // ------------------------------------------------ modals
+  // ------------------------------------------------ form drawer
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null) // product object or null
   const [form, setForm] = useState(EMPTY_FORM)
@@ -58,6 +81,8 @@ export default function Inventory() {
     () => [...new Set(products.map((p) => p.category).filter(Boolean))],
     [products],
   )
+
+  const lowCount = products.filter((p) => p.stock_quantity <= LOW_STOCK_THRESHOLD).length
 
   async function load() {
     setLoading(true)
@@ -85,7 +110,7 @@ export default function Inventory() {
     return true
   })
 
-  // ------------------------------------------------ detail pop-out
+  // ------------------------------------------------ detail drawer
   function openDetails(product) {
     setDetailProduct(product)
   }
@@ -249,53 +274,65 @@ export default function Inventory() {
         <div>
           <h1>Inventory</h1>
           <p className="muted">
-            {products.length} products · {products.filter((p) => p.stock_quantity <= LOW_STOCK_THRESHOLD).length} low stock
+            {products.length} products · {lowCount} low stock
           </p>
         </div>
-        <RoleGate allowedRoles={['owner']}>
-          <button type="button" className="btn" onClick={openAdd}>
-            ＋ Add Product
-          </button>
-        </RoleGate>
+        {isOwner && (
+          <Button onClick={openAdd}>
+            <Plus size={16} aria-hidden="true" /> Add Product
+          </Button>
+        )}
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <ErrorState onRetry={load}>{error}</ErrorState>}
 
-      <div className="card filter-bar">
-        <input
-          type="search"
-          className="form-control"
-          placeholder="Search by name or ID…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select className="form-control" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+      <Card className="inv-toolbar">
+        <div className="ui-input-icon-wrap inv-search">
+          <Search size={16} aria-hidden="true" />
+          <Input
+            type="search"
+            placeholder="Search by name or ID…"
+            aria-label="Search products"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Select
+          aria-label="Filter by category"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+        >
           <option value="">All categories</option>
           {categories.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
-        </select>
-        <label className="checkbox-label">
+        </Select>
+        <label className="checkbox-label inv-low-toggle">
           <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} />
           Low stock only
         </label>
-      </div>
+      </Card>
 
       {loading ? (
-        <div className="card page-loading" role="status">
-          <div className="spinner" />
-          <p className="muted">Loading inventory…</p>
+        <div className="inv-grid" aria-label="Loading inventory" role="status">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="inv-card inv-card-skeleton">
+              <Skeleton width="100%" height="7rem" />
+              <Skeleton width="70%" height="0.9rem" />
+              <Skeleton width="45%" height="0.9rem" />
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="card">
-          <p className="muted">No products found{search || categoryFilter || lowOnly ? ' with these filters.' : ' — add your first product.'}</p>
-        </div>
+        <Card>
+          <EmptyState icon={PackageSearch} title="No products found">
+            {search || categoryFilter || lowOnly
+              ? 'Nothing matches these filters — try clearing the search or category.'
+              : 'Add your first product to start selling.'}
+          </EmptyState>
+        </Card>
       ) : (
-        <div className="inventory-grid">
+        <div className="inv-grid">
           {filtered.map((p) => {
             const low = p.stock_quantity > 0 && p.stock_quantity <= LOW_STOCK_THRESHOLD
             const out = p.stock_quantity === 0
@@ -303,82 +340,109 @@ export default function Inventory() {
               <button
                 key={p.product_id}
                 type="button"
-                className={`product-card ${low ? 'is-low' : ''} ${out ? 'is-out' : ''}`}
+                className={`inv-card ${low ? 'is-low' : ''} ${out ? 'is-out' : ''}`}
                 onClick={() => openDetails(p)}
                 title={`View ${p.product_name}`}
               >
-                <span className="product-card-photo">
-                  <Avatar product={p} size="lg" className="product-card-avatar" />
-                  {out && <span className="product-card-flag flag-out">Out of stock</span>}
-                  {!out && low && <span className="product-card-flag flag-low">Low</span>}
+                <span className={`inv-card-photo ${out ? 'is-out' : ''}`}>
+                  <img
+                    src={p.photo || undefined}
+                    alt=""
+                    className="inv-card-img"
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                  {!p.photo && <span className="inv-card-fallback" aria-hidden="true">{p.product_name.slice(0, 1).toUpperCase()}</span>}
+                  {out && <Badge variant="danger" className="inv-card-flag">Out of stock</Badge>}
+                  {!out && low && <Badge variant="warning" className="inv-card-flag">Low</Badge>}
                 </span>
-                <span className="product-card-name">{p.product_name}</span>
+                <span className="inv-card-name">{p.product_name}</span>
+                <span className="inv-card-meta">
+                  <span className="inv-card-price">{fmtMoney(p.retail_price)}</span>
+                  <Badge variant={stockTone(p.stock_quantity)}>{stockText(p.stock_quantity)}</Badge>
+                </span>
               </button>
             )
           })}
         </div>
       )}
 
-      {/* ---------------- Detail pop-out ---------------- */}
-      <Modal
+      {/* ---------------- Detail drawer ---------------- */}
+      <Drawer
         open={!!detailProduct}
         onClose={() => setDetailProduct(null)}
         title={detailProduct?.product_name ?? ''}
       >
         {detailProduct && (
-          <div className="product-detail">
-            <div className="product-detail-photo">
-              <Avatar product={detailProduct} size="xl" />
+          <div className="inv-detail">
+            <div className="inv-detail-photo">
+              <img
+                src={detailProduct.photo || undefined}
+                alt={`Photo of ${detailProduct.product_name}`}
+                className="inv-detail-img"
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+              {!detailProduct.photo && (
+                <span className="inv-detail-fallback" aria-hidden="true">
+                  {detailProduct.product_name.slice(0, 1).toUpperCase()}
+                </span>
+              )}
             </div>
 
-            <div className="product-detail-body">
-              <div className="summary-row">
-                <span className="muted">Product ID</span>
-                <strong>#{detailProduct.product_id}</strong>
+            <div className="ui-detail-facts">
+              <div className="ui-fact">
+                <span className="ui-fact-label">Product ID</span>
+                <span className="ui-fact-value">#{detailProduct.product_id}</span>
               </div>
-              <div className="summary-row">
-                <span className="muted">Category</span>
-                <strong>{detailProduct.category || '—'}</strong>
+              <div className="ui-fact">
+                <span className="ui-fact-label">Category</span>
+                <span className="ui-fact-value">{detailProduct.category || '—'}</span>
               </div>
-              <div className="summary-row">
-                <span className="muted">Supplier</span>
-                <strong>{detailProduct.supplier_name || '—'}</strong>
+              <div className="ui-fact">
+                <span className="ui-fact-label">Supplier</span>
+                <span className="ui-fact-value">{detailProduct.supplier_name || '—'}</span>
               </div>
-              <div className="summary-row">
-                <span className="muted">Cost Price</span>
-                <strong>{fmtMoney(detailProduct.cost_price)}</strong>
+              <div className="ui-fact">
+                <span className="ui-fact-label">Cost Price</span>
+                <span className="ui-fact-value ui-num">{fmtMoney(detailProduct.cost_price)}</span>
               </div>
-              <div className="summary-row">
-                <span className="muted">Retail Price</span>
-                <strong>{fmtMoney(detailProduct.retail_price)}</strong>
+              <div className="ui-fact">
+                <span className="ui-fact-label">Retail Price</span>
+                <span className="ui-fact-value ui-num">{fmtMoney(detailProduct.retail_price)}</span>
               </div>
-              <div className="summary-row">
-                <span className="muted">Stock</span>
-                <span className={`stock-chip ${detailProduct.stock_quantity === 0 ? 'stock-out' : detailProduct.stock_quantity <= LOW_STOCK_THRESHOLD ? 'stock-low' : 'stock-ok'}`}>
-                  {detailProduct.stock_quantity === 0 ? 'Out of stock' : `${detailProduct.stock_quantity} in stock`}
+              <div className="ui-fact">
+                <span className="ui-fact-label">Stock</span>
+                <span className="ui-fact-value">
+                  <Badge variant={stockTone(detailProduct.stock_quantity)}>
+                    {stockText(detailProduct.stock_quantity)}
+                  </Badge>
                 </span>
               </div>
-              <div className="summary-row">
-                <span className="muted">Added</span>
-                <strong>{fmtDate(detailProduct.date)}</strong>
+              <div className="ui-fact">
+                <span className="ui-fact-label">Added</span>
+                <span className="ui-fact-value">{fmtDate(detailProduct.date)}</span>
               </div>
             </div>
-          </div>
-        )}
-      {detailProduct && isOwner && (
-          <div className="product-detail-actions">
-            <button type="button" className="btn btn-outline" onClick={() => openStock(detailProduct)}>
-              Adjust Stock
-            </button>
-            <button type="button" className="btn" onClick={openEditFromDetails}>
-              ✏️ Edit Product
-            </button>
-          </div>
-        )}
-      </Modal>
 
-      {/* ---------------- Add / Edit modal ---------------- */}
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? `Edit ${editing.product_name}` : 'Add Product'}>
+            {isOwner && (
+              <div className="ui-overlay-footer">
+                <Button variant="secondary" onClick={() => openStock(detailProduct)}>
+                  Adjust Stock
+                </Button>
+                <Button onClick={openEditFromDetails}>
+                  <Pencil size={15} aria-hidden="true" /> Edit Product
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Drawer>
+
+      {/* ---------------- Add / Edit drawer ---------------- */}
+      <Drawer
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title={editing ? `Edit ${editing.product_name}` : 'Add Product'}
+      >
         <form onSubmit={handleSave} noValidate>
           {formError && (
             <div className="alert alert-error" role="alert">{formError}</div>
@@ -398,7 +462,7 @@ export default function Inventory() {
 
           <div className="form-group">
             <label className="form-label" htmlFor="inv-name">Product Name *</label>
-            <input id="inv-name" name="product_name" type="text" className="form-control" value={form.product_name} onChange={handleFormChange} autoFocus />
+            <Input id="inv-name" name="product_name" type="text" value={form.product_name} onChange={handleFormChange} autoFocus />
           </div>
 
           <div className="form-row">
@@ -408,33 +472,33 @@ export default function Inventory() {
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="inv-supplier">Supplier</label>
-              <input id="inv-supplier" name="supplier_name" type="text" className="form-control" value={form.supplier_name} onChange={handleFormChange} />
+              <Input id="inv-supplier" name="supplier_name" type="text" value={form.supplier_name} onChange={handleFormChange} />
             </div>
           </div>
 
           <div className="form-row form-row-3">
             <div className="form-group">
               <label className="form-label" htmlFor="inv-cost">Cost Price ৳ *</label>
-              <input id="inv-cost" name="cost_price" type="number" min="0" step="0.01" className="form-control" value={form.cost_price} onChange={handleFormChange} />
+              <Input id="inv-cost" name="cost_price" type="number" min="0" step="0.01" value={form.cost_price} onChange={handleFormChange} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="inv-retail">Retail Price ৳ *</label>
-              <input id="inv-retail" name="retail_price" type="number" min="0" step="0.01" className="form-control" value={form.retail_price} onChange={handleFormChange} />
+              <Input id="inv-retail" name="retail_price" type="number" min="0" step="0.01" value={form.retail_price} onChange={handleFormChange} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="inv-stock">Stock Qty *</label>
-              <input id="inv-stock" name="stock_quantity" type="number" min="0" step="1" className="form-control" value={form.stock_quantity} onChange={handleFormChange} />
+              <Input id="inv-stock" name="stock_quantity" type="number" min="0" step="1" value={form.stock_quantity} onChange={handleFormChange} />
             </div>
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={() => setFormOpen(false)}>Cancel</button>
-            <button type="submit" className="btn" disabled={saving}>
+          <div className="ui-overlay-footer">
+            <Button type="button" variant="secondary" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={saving}>
               {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add Product'}
-            </button>
+            </Button>
           </div>
         </form>
-      </Modal>
+      </Drawer>
 
       {/* ---------------- Stock adjust modal ---------------- */}
       <Modal open={!!stockTarget} onClose={() => setStockTarget(null)} title={`Adjust Stock — ${stockTarget?.product_name ?? ''}`}>
@@ -446,11 +510,10 @@ export default function Inventory() {
             {stockError && <div className="alert alert-error" role="alert">{stockError}</div>}
             <div className="form-group">
               <label className="form-label" htmlFor="inv-delta">Quantity Change *</label>
-              <input
+              <Input
                 id="inv-delta"
                 type="number"
                 step="1"
-                className="form-control"
                 value={stockDelta}
                 onChange={(e) => setStockDelta(e.target.value)}
                 placeholder="e.g. 50 to add, -3 to remove"
@@ -458,9 +521,9 @@ export default function Inventory() {
               />
               <p className="form-hint info">New stock = current + change (cannot go below 0).</p>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-outline" onClick={() => setStockTarget(null)}>Cancel</button>
-              <button type="submit" className="btn" disabled={stockSaving}>{stockSaving ? 'Saving…' : 'Apply'}</button>
+            <div className="ui-overlay-footer">
+              <Button type="button" variant="secondary" onClick={() => setStockTarget(null)}>Cancel</Button>
+              <Button type="submit" loading={stockSaving}>{stockSaving ? 'Saving…' : 'Apply'}</Button>
             </div>
           </form>
         )}
@@ -473,10 +536,10 @@ export default function Inventory() {
         title="Delete Product"
         footer={
           <>
-            <button type="button" className="btn btn-outline" onClick={() => setDeleteTarget(null)}>Cancel</button>
-            <button type="button" className="btn btn-danger" onClick={handleDelete} disabled={deleteBusy}>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="danger" onClick={handleDelete} loading={deleteBusy}>
               {deleteBusy ? 'Deleting…' : 'Delete'}
-            </button>
+            </Button>
           </>
         }
       >
@@ -530,13 +593,13 @@ function PhotoField({ product, file, removed, onChoose, onRemove, disabled }) {
           style={{ display: 'none' }}
         />
         <div className="row-actions">
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => inputRef.current?.click()} disabled={disabled}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => inputRef.current?.click()} disabled={disabled}>
             {file ? 'Change image…' : 'Choose image…'}
-          </button>
+          </Button>
           {(file || serverPhoto) && (
-            <button type="button" className="btn btn-outline btn-sm" onClick={onRemove} disabled={disabled}>
+            <Button type="button" variant="secondary" size="sm" onClick={onRemove} disabled={disabled}>
               Remove
-            </button>
+            </Button>
           )}
         </div>
         {!file && !product && <p className="form-hint info">You can add a picture now or later.</p>}

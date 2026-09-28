@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react'
+import { AlertTriangle, Pencil, Plus, Trash2, UserRound } from 'lucide-react'
 import * as employeesApi from '../api/employees.js'
 import * as staffApi from '../api/staff.js'
 import * as authApi from '../api/auth.js'
-import Modal from '../components/Modal.jsx'
-import Avatar from '../components/Avatar.jsx'
 import { fmtMoney, fmtDate, fmtDateTime } from '../utils/format.js'
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  DataTable,
+  Drawer,
+  ErrorState,
+  Input,
+  Modal,
+  Select,
+  StatCard,
+  Tabs,
+} from '../components/ui/index.jsx'
 
 /**
  * Owner-only staff management: roster, per-employee sales performance,
@@ -20,7 +34,11 @@ import { fmtMoney, fmtDate, fmtDateTime } from '../utils/format.js'
  *                 shows on the employee's own dashboard
  */
 
-const TABS = ['details', 'warnings', 'commission']
+const TABS = [
+  { id: 'details', label: 'Details', icon: UserRound },
+  { id: 'warnings', label: 'Warnings' },
+  { id: 'commission', label: 'Commission' },
+]
 
 export default function Staff() {
   // ------------------------------------------------ roster
@@ -51,13 +69,13 @@ export default function Staff() {
   const [commBusy, setCommBusy] = useState(false)
   const [commError, setCommError] = useState(null)
 
-  // ------------------------------------------------ add modal
+  // ------------------------------------------------ add drawer
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState({ name: '', phone_number: '', position: '', salary: '', password: '', role: 'employee' })
   const [addError, setAddError] = useState(null)
   const [addBusy, setAddBusy] = useState(false)
 
-  // ------------------------------------------------ edit modal
+  // ------------------------------------------------ edit drawer
   const [editTarget, setEditTarget] = useState(null)
   const [editForm, setEditForm] = useState({ name: '', phone_number: '', position: '', salary: '', role: 'employee' })
   const [editError, setEditError] = useState(null)
@@ -251,6 +269,78 @@ export default function Staff() {
     }
   }
 
+  // ------------------------------------------------ roster table
+  const columns = [
+    {
+      key: 'name',
+      label: 'Name',
+      render: (emp) => (
+        <span className="table-person">
+          <Avatar user={emp} size="xs" />
+          <span className="cell-strong">{emp.name}</span>
+        </span>
+      ),
+    },
+    { key: 'phone_number', label: 'Phone' },
+    {
+      key: 'position',
+      label: 'Position',
+      getValue: (emp) => emp.position || '',
+      render: (emp) => emp.position || '—',
+    },
+    {
+      key: 'salary',
+      label: 'Salary',
+      align: 'right',
+      getValue: (emp) => (emp.salary == null ? -1 : emp.salary),
+      render: (emp) => (emp.salary != null ? <span className="ui-num">{fmtMoney(emp.salary)}</span> : '—'),
+    },
+    {
+      key: 'user_type',
+      label: 'Role',
+      render: (emp) => <Badge variant={emp.user_type === 'owner' ? 'brand' : 'neutral'}>{emp.user_type}</Badge>,
+    },
+    {
+      key: 'date_appointed',
+      label: 'Joined',
+      getValue: (emp) => emp.date_appointed || '',
+      render: (emp) => <span className="muted">{fmtDate(emp.date_appointed)}</span>,
+    },
+    {
+      key: 'sales',
+      label: 'Sales (all-time)',
+      getValue: (emp) => perfFor(emp.user_id)?.total_revenue ?? -1,
+      render: (emp) => {
+        const perf = perfFor(emp.user_id)
+        return perf ? (
+          <span className="ui-num">
+            {perf.total_sales} txns · {fmtMoney(perf.total_revenue)}
+          </span>
+        ) : (
+          'No sales yet'
+        )
+      },
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      sortable: false,
+      render: (emp) => (
+        <div className="row-actions">
+          <Button variant="secondary" size="sm" onClick={() => openTab(emp)}>
+            View
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => openEdit(emp)}>
+            <Pencil size={13} aria-hidden="true" /> Edit
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => setDeleteTarget(emp)}>
+            <Trash2 size={13} aria-hidden="true" /> Delete
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div className="page">
       <div className="page-header">
@@ -258,94 +348,39 @@ export default function Staff() {
           <h1>Staff</h1>
           <p className="muted">Manage employee accounts, roles, warnings and commission</p>
         </div>
-        <button type="button" className="btn" onClick={() => setAddOpen(true)}>
-          ＋ Add Employee
-        </button>
+        <Button onClick={() => setAddOpen(true)}>
+          <Plus size={16} aria-hidden="true" /> Add Employee
+        </Button>
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <ErrorState onRetry={load}>{error}</ErrorState>}
 
-      <div className="card">
-        <div className="card-title">Employee Roster</div>
+      <Card>
+        <CardHeader
+          title="Employee Roster"
+          subtitle={`${employees.length} team member${employees.length === 1 ? '' : 's'}`}
+        />
         {loading ? (
-          <div className="page-loading" role="status">
+          <div className="page-loading" role="status" aria-label="Loading staff">
             <div className="spinner" />
             <p className="muted">Loading staff…</p>
           </div>
         ) : employees.length === 0 ? (
           <p className="muted">No employees yet. Add your first team member.</p>
         ) : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Phone</th>
-                  <th>Position</th>
-                  <th>Salary</th>
-                  <th>Role</th>
-                  <th>Joined</th>
-                  <th>Sales (all-time)</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp) => {
-                  const perf = perfFor(emp.user_id)
-                  return (
-                    <tr
-                      key={emp.user_id}
-                      className={tabTarget?.user_id === emp.user_id ? 'row-active' : undefined}
-                    >
-                      <td>#{emp.user_id}</td>
-                      <td>
-                        <span className="table-person">
-                          <Avatar user={emp} size="xs" />
-                          <span className="cell-strong">{emp.name}</span>
-                        </span>
-                      </td>
-                      <td>{emp.phone_number}</td>
-                      <td>{emp.position || '—'}</td>
-                      <td>{emp.salary != null ? fmtMoney(emp.salary) : '—'}</td>
-                      <td>
-                        <span className={`role-badge role-${emp.user_type}`}>{emp.user_type}</span>
-                      </td>
-                      <td className="muted">{fmtDate(emp.date_appointed)}</td>
-                      <td>
-                        {perf
-                          ? `${perf.total_sales} txns · ${fmtMoney(perf.total_revenue)}`
-                          : 'No sales yet'}
-                      </td>
-                      <td>
-                        <div className="row-actions">
-                          <button type="button" className="btn btn-outline btn-sm" onClick={() => openTab(emp)}>
-                            View
-                          </button>
-                          <button type="button" className="btn btn-outline btn-sm" onClick={() => openEdit(emp)}>
-                            Edit
-                          </button>
-                          <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(emp)}>
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            rows={employees}
+            getRowKey={(emp) => emp.user_id}
+            rowClassName={(emp) => (tabTarget?.user_id === emp.user_id ? 'row-active' : undefined)}
+            empty={<p className="muted">No employees yet. Add your first team member.</p>}
+          />
         )}
-      </div>
+      </Card>
 
       {/* ---------------- Per-employee tab panel ---------------- */}
       {tabTarget && (
-        <div className="card staff-tabcard">
+        <Card className="staff-tabcard">
           <div className="staff-tabhead">
             <div className="staff-tabperson">
               <Avatar user={tabTarget} size="sm" />
@@ -354,42 +389,26 @@ export default function Staff() {
                 <div className="muted">{tabTarget.position || 'Staff member'} · #{tabTarget.user_id}</div>
               </div>
             </div>
-            <div className="staff-tabs" role="tablist" aria-label={`${tabTarget.name} details`}>
-              {TABS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t}
-                  className={`staff-tab ${tab === t ? 'staff-tab-active' : ''}`}
-                  onClick={() => setTab(t)}
-                >
-                  {t === 'details' && 'Details'}
-                  {t === 'warnings' && (
-                    <>
-                      Warnings
-                      {warnings.length > 0 && (
-                        <span className="warn-badge" title={`${warnings.length} warning(s)`}>
-                          {warnings.length}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {t === 'commission' && 'Commission'}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
+            <Tabs
+              tabs={TABS.map((t) =>
+                t.id === 'warnings' ? { ...t, badge: warnings.length > 0 ? warnings.length : null } : t,
+              )}
+              active={tab}
+              onChange={setTab}
+              ariaLabel={`${tabTarget.name} details`}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setTabTarget(null)}
               aria-label="Close staff panel"
             >
               ✕ Close
-            </button>
+            </Button>
           </div>
 
           {tabError && <div className="alert alert-error" role="alert">{tabError}</div>}
+          {tabBusy && <div className="spinner" role="status" aria-label="Loading panel" />}
 
           {/* ---- Details tab ---- */}
           {tab === 'details' && (
@@ -417,26 +436,13 @@ export default function Staff() {
                 if (!perf) return <p className="muted">No sales recorded yet.</p>
                 return (
                   <div className="stat-grid" style={{ marginTop: '0.75rem' }}>
-                    <div className="card stat-card">
-                      <div className="stat-label">Transactions (all-time)</div>
-                      <div className="stat-value">{perf.total_sales}</div>
-                    </div>
-                    <div className="card stat-card">
-                      <div className="stat-label">Revenue generated</div>
-                      <div className="stat-value">{fmtMoney(perf.total_revenue)}</div>
-                    </div>
-                    <div className="card stat-card">
-                      <div className="stat-label">Profit generated</div>
-                      <div className="stat-value">{fmtMoney(perf.total_profit)}</div>
-                    </div>
-                    <div className="card stat-card">
-                      <div className="stat-label">Commission policy</div>
-                      <div className="stat-value">
-                        {commission?.rate != null
-                          ? `${commission.rate}% of ${commission.basis}`
-                          : 'Not set'}
-                      </div>
-                    </div>
+                    <StatCard label="Transactions (all-time)" value={perf.total_sales} />
+                    <StatCard label="Revenue generated" value={fmtMoney(perf.total_revenue)} tone="revenue" />
+                    <StatCard label="Profit generated" value={fmtMoney(perf.total_profit)} tone="profit" />
+                    <StatCard
+                      label="Commission policy"
+                      value={commission?.rate != null ? `${commission.rate}% of ${commission.basis}` : 'Not set'}
+                    />
                   </div>
                 )
               })()}
@@ -450,9 +456,9 @@ export default function Staff() {
                 <p className="muted" style={{ margin: 0 }}>
                   Formal warnings are visible to the employee on their own dashboard.
                 </p>
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => { setWarnOpen(true); setWarnError(null) }}>
-                  ⚠ Issue Warning
-                </button>
+                <Button variant="danger" size="sm" onClick={() => { setWarnOpen(true); setWarnError(null) }}>
+                  <AlertTriangle size={14} aria-hidden="true" /> Issue Warning
+                </Button>
               </div>
               {warnings.length === 0 ? (
                 <p className="muted">No warnings on record. 🎉</p>
@@ -485,43 +491,41 @@ export default function Staff() {
                 <div className="commission-fields">
                   <div className="form-group">
                     <label className="form-label" htmlFor="comm-basis">Commission basis</label>
-                    <select
+                    <Select
                       id="comm-basis"
-                      className="form-control"
                       value={commForm.basis}
                       onChange={(e) => setCommForm((f) => ({ ...f, basis: e.target.value }))}
                     >
                       <option value="revenue">% of revenue generated</option>
                       <option value="profit">% of profit generated</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="comm-rate">Rate (%)</label>
-                    <input
+                    <Input
                       id="comm-rate"
                       type="number"
                       min="0"
                       max="100"
                       step="0.01"
-                      className="form-control"
                       placeholder="e.g. 5"
                       value={commForm.rate}
                       onChange={(e) => setCommForm((f) => ({ ...f, rate: e.target.value }))}
                     />
                   </div>
                   <div className="commission-actions">
-                    <button type="submit" className="btn" disabled={commBusy}>
+                    <Button type="submit" loading={commBusy}>
                       {commBusy ? 'Saving…' : 'Save Policy'}
-                    </button>
+                    </Button>
                     {commission?.rate != null && (
-                      <button
+                      <Button
                         type="button"
-                        className="btn btn-outline"
+                        variant="secondary"
                         disabled={commBusy}
                         onClick={() => setCommForm((f) => ({ ...f, rate: '' }))}
                       >
                         Disable (clear rate, then save)
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -538,7 +542,7 @@ export default function Staff() {
               </div>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* ---------------- Issue warning modal ---------------- */}
@@ -558,88 +562,88 @@ export default function Staff() {
             />
             <p className="form-hint">The employee sees this warning and the reason on their dashboard.</p>
           </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={() => setWarnOpen(false)}>Cancel</button>
-            <button type="submit" className="btn btn-danger" disabled={warnBusy}>
+          <div className="ui-overlay-footer">
+            <Button type="button" variant="secondary" onClick={() => setWarnOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="danger" loading={warnBusy}>
               {warnBusy ? 'Issuing…' : 'Issue Warning'}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ---------------- Add employee modal ---------------- */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Employee">
+      {/* ---------------- Add employee drawer ---------------- */}
+      <Drawer open={addOpen} onClose={() => setAddOpen(false)} title="Add Employee">
         <form onSubmit={handleAddSubmit} noValidate>
           {addError && <div className="alert alert-error" role="alert">{addError}</div>}
 
           <div className="form-group">
             <label className="form-label" htmlFor="staff-name">Full Name *</label>
-            <input id="staff-name" name="name" type="text" className="form-control" value={addForm.name} onChange={handleAddChange} autoFocus />
+            <Input id="staff-name" name="name" type="text" value={addForm.name} onChange={handleAddChange} autoFocus />
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="staff-phone">Phone Number *</label>
-            <input id="staff-phone" name="phone_number" type="tel" className="form-control" value={addForm.phone_number} onChange={handleAddChange} placeholder="017XXXXXXXX" />
+            <Input id="staff-phone" name="phone_number" type="tel" value={addForm.phone_number} onChange={handleAddChange} placeholder="017XXXXXXXX" />
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="staff-password">Initial Password *</label>
-            <input id="staff-password" name="password" type="text" className="form-control" value={addForm.password} onChange={handleAddChange} placeholder="Shared with the employee" />
+            <Input id="staff-password" name="password" type="text" value={addForm.password} onChange={handleAddChange} placeholder="Shared with the employee" />
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label" htmlFor="staff-position">Position</label>
-              <input id="staff-position" name="position" type="text" className="form-control" value={addForm.position} onChange={handleAddChange} placeholder="e.g. Cashier" />
+              <Input id="staff-position" name="position" type="text" value={addForm.position} onChange={handleAddChange} placeholder="e.g. Cashier" />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="staff-salary">Salary ৳</label>
-              <input id="staff-salary" name="salary" type="number" min="0" step="0.01" className="form-control" value={addForm.salary} onChange={handleAddChange} />
+              <Input id="staff-salary" name="salary" type="number" min="0" step="0.01" value={addForm.salary} onChange={handleAddChange} />
             </div>
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={() => setAddOpen(false)}>Cancel</button>
-            <button type="submit" className="btn" disabled={addBusy}>{addBusy ? 'Adding…' : 'Add Employee'}</button>
+          <div className="ui-overlay-footer">
+            <Button type="button" variant="secondary" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={addBusy}>{addBusy ? 'Adding…' : 'Add Employee'}</Button>
           </div>
         </form>
-      </Modal>
+      </Drawer>
 
-      {/* ---------------- Edit employee modal ---------------- */}
-      <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={`Edit ${editTarget?.name ?? ''}`}>
+      {/* ---------------- Edit employee drawer ---------------- */}
+      <Drawer open={!!editTarget} onClose={() => setEditTarget(null)} title={`Edit ${editTarget?.name ?? ''}`}>
         <form onSubmit={handleEditSubmit} noValidate>
           {editError && <div className="alert alert-error" role="alert">{editError}</div>}
 
           <div className="form-group">
             <label className="form-label" htmlFor="estaff-name">Name</label>
-            <input id="estaff-name" name="name" type="text" className="form-control" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+            <Input id="estaff-name" name="name" type="text" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="estaff-phone">Phone Number</label>
-            <input id="estaff-phone" name="phone_number" type="tel" className="form-control" value={editForm.phone_number} onChange={(e) => setEditForm((f) => ({ ...f, phone_number: e.target.value }))} />
+            <Input id="estaff-phone" name="phone_number" type="tel" value={editForm.phone_number} onChange={(e) => setEditForm((f) => ({ ...f, phone_number: e.target.value }))} />
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label" htmlFor="estaff-position">Position</label>
-              <input id="estaff-position" name="position" type="text" className="form-control" value={editForm.position} onChange={(e) => setEditForm((f) => ({ ...f, position: e.target.value }))} />
+              <Input id="estaff-position" name="position" type="text" value={editForm.position} onChange={(e) => setEditForm((f) => ({ ...f, position: e.target.value }))} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="estaff-salary">Salary ৳</label>
-              <input id="estaff-salary" name="salary" type="number" min="0" step="0.01" className="form-control" value={editForm.salary} onChange={(e) => setEditForm((f) => ({ ...f, salary: e.target.value }))} />
+              <Input id="estaff-salary" name="salary" type="number" min="0" step="0.01" value={editForm.salary} onChange={(e) => setEditForm((f) => ({ ...f, salary: e.target.value }))} />
             </div>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="estaff-role">Role</label>
-            <select id="estaff-role" name="role" className="form-control" value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}>
+            <Select id="estaff-role" name="role" value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}>
               <option value="employee">Employee</option>
               <option value="owner">Owner</option>
-            </select>
+            </Select>
             <p className="form-hint info">Changing role converts the account type.</p>
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={() => setEditTarget(null)}>Cancel</button>
-            <button type="submit" className="btn" disabled={editBusy}>{editBusy ? 'Saving…' : 'Save Changes'}</button>
+          <div className="ui-overlay-footer">
+            <Button type="button" variant="secondary" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button type="submit" loading={editBusy}>{editBusy ? 'Saving…' : 'Save Changes'}</Button>
           </div>
         </form>
-      </Modal>
+      </Drawer>
 
       {/* ---------------- Delete confirm ---------------- */}
       <Modal
@@ -648,10 +652,10 @@ export default function Staff() {
         title="Delete Employee"
         footer={
           <>
-            <button type="button" className="btn btn-outline" onClick={() => setDeleteTarget(null)}>Cancel</button>
-            <button type="button" className="btn btn-danger" onClick={handleDelete} disabled={deleteBusy}>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="danger" onClick={handleDelete} loading={deleteBusy}>
               {deleteBusy ? 'Deleting…' : 'Delete'}
-            </button>
+            </Button>
           </>
         }
       >

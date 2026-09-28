@@ -1712,3 +1712,206 @@
     max-height: 560px;
   }
 }
+
+/* ============================================================
+   Phase 6 — Inventory
+   ============================================================ */
+.ui-input-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.ui-input-icon-wrap > svg {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.ui-input-icon-wrap .ui-input {
+  padding-left: 2.1rem;
+}
+
+.inv-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.inv-search {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+.inv-low-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+.inv-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+button.inv-card:hover {
+  border-color: var(--brand-300);
+  box-shadow: var(--shadow-1);
+}
+button.inv-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.inv-card-skeleton {
+  cursor: default;
+  gap: var(--space-3);
+}
+.inv-card-photo {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-alt);
+  display: grid;
+  place-items: center;
+}
+.inv-card-photo.is-out img { filter: grayscale(1); opacity: 0.6; }
+.inv-card-img { width: 100%; height: 100%; object-fit: cover; }
+.inv-card-fallback {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--brand-400);
+}
+.inv-card-flag {
+  position: absolute;
+  bottom: var(--space-2);
+  left: var(--space-2);
+}
+.inv-card-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.4em;
+}
+.inv-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.inv-card-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.inv-card.is-out .inv-card-name { color: var(--text-muted); }
+
+/* Inventory detail drawer */
+.inv-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.inv-detail-photo {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface-alt);
+  display: grid;
+  place-items: center;
+}
+.inv-detail-img { width: 100%; height: 100%; object-fit: cover; }
+.inv-detail-fallback {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--brand-400);
+}
+
+/* Shared detail-facts list (drawer summaries) */
+.ui-detail-facts {
+  display: flex;
+  flex-direction: column;
+}
+.ui-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.ui-fact:last-child { border-bottom: none; }
+.ui-fact-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.ui-fact-value {
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+/* Staff tab head: person | tabs | close */
+.staff-tabcard .ui-card-header { display: none; }
+.staff-tabhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.staff-tabperson {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 200px;
+}
+.staff-tabbody {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.staff-tabbody-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* DataTable inline helpers used by Staff roster */
+.ui-table .row-active td { background: var(--brand-50); }
+.ui-table .table-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ui-table .cell-strong { font-weight: 600; }
