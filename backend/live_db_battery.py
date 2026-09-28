@@ -30,7 +30,7 @@ import database  # noqa: E402
 from main import app  # noqa: E402
 
 PASSWORD = "shongkho123"
-OWNER = "edwinzaman"
+OWNER = "01711111100"  # Edwin Zaman
 EMPLOYEE = "01711111101"  # Rahim Uddin
 
 EXPECTED_TABLES = {

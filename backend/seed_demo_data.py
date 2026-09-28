@@ -4,7 +4,7 @@ Demo data seeder — populates a realistic store so the Analytics page
 to chew on.
 
 Creates (idempotent — safe to run twice; --force wipes and reseeds):
-  Owner   : Edwin Zaman          login phone: "edwinzaman"  pw: shongkho123
+  Owner   : Edwin Zaman          login phone: "01711111100"  pw: shongkho123
   Staff   : 7 employees of Edwin — Rahim, Karim, Sumi, Tanvir,
             Nusrat, Jahangir, Mim (skill spread -> a real race with
             a clear leader, a mid-pack and trainees; Sumi slumps this
@@ -113,6 +113,110 @@ PORTRAITS = {
 }
 
 AVATAR_DIR = os.path.join(BASE_DIR, "static", "avatars")
+PRODUCT_IMG_DIR = os.path.join(BASE_DIR, "static", "products")
+
+# Per-product photo source: one or two keywords that pick a fitting real
+# photo (loremflickr keyword service, deterministic via ?lock=). The file
+# is cached under backend/static/products/ so it only downloads once.
+PRODUCT_PHOTOS = {
+    "Mustard Oil 1L":       "mustard,oil",
+    "Miniket Rice 5kg":     "rice",
+    "Sugar 1kg":            "sugar",
+    "Atta 2kg":             "flour,wheat",
+    "Lentils 1kg":          "lentils",
+    "Cold Drink 250ml":     "soda,bottle",
+    "Mango Juice 1L":       "mango,juice",
+    "Tea Leaves 200g":      "tea",
+    "Instant Noodles":      "noodles",
+    "Biscuits (family)":    "biscuits",
+    "Soap Bar":             "soap",
+    "Shampoo Sachet x12":   "shampoo",
+    "Soybean Oil 5L":       "cooking,oil",
+    "Milk Powder 500g":     "milk",
+    "Ghee 500g":            "butter,ghee",
+    "Rolled Oats 400g":     "oats",
+    "Turmeric Powder 200g": "turmeric,spice",
+    "Chili Powder 200g":    "chili,spice",
+    "Coriander Seeds 100g": "coriander,spice",
+    "Puffed Rice 500g":     "rice,snack",
+    "Chanachur 350g":       "snack,food",
+    "Chocolate Bar":        "chocolate",
+    "Energy Drink 250ml":   "energy,drink",
+    "Mineral Water 1L":     "water,bottle",
+}
+
+# Category-colored fallback tiles (used when a download fails offline)
+CATEGORY_COLORS = {
+    "Cooking":   "#c2410c",
+    "Staples":   "#a16207",
+    "Beverages": "#0e7490",
+    "Snacks":    "#9d174d",
+    "Care":      "#4d7c0f",
+}
+
+
+def _slugify(name: str) -> str:
+    out = "".join(ch.lower() if ch.isalnum() else "-" for ch in name)
+    return "-".join(part for part in out.split("-") if part)
+
+
+def _valid_image(path: str) -> bool:
+    """Heuristic: real JPEG/PNG bytes, big enough to be a photo."""
+    try:
+        if os.path.getsize(path) < 2000:
+            return False
+        with open(path, "rb") as f:
+            head = f.read(8)
+        return head[:2] == b"\xff\xd8" or head[:4] == b"\x89PNG"
+    except OSError:
+        return False
+
+
+def _fallback_tile(name: str, category: str) -> str:
+    """Category-colored SVG tile with the product initial (offline path)."""
+    color = CATEGORY_COLORS.get(category or "", "#1f7263")
+    initial = name.strip()[0].upper()
+    svg = (
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='480' height='480'>"
+        f"<rect width='480' height='480' fill='{color}'/>"
+        f"<text x='240' y='305' font-family='Arial' font-size='220' "
+        f"fill='white' text-anchor='middle' font-weight='bold'>{initial}</text>"
+        f"</svg>"
+    )
+    return "data:image/svg+xml;utf8," + svg.replace("<", "%3C").replace(">", "%3E").replace("#", "%23").replace(" ", "%20")
+
+
+def _refresh_product_photos(db) -> None:
+    """
+    Give every product a photo: download once into static/products/ and
+    point products.photo at the /static URL. Falls back to a generated
+    category-colored tile when the network is unavailable.
+    """
+    os.makedirs(PRODUCT_IMG_DIR, exist_ok=True)
+    updated = 0
+    for row in db.query(models.Product).all():
+        if row.photo and str(row.photo).startswith("/static/products/"):
+            continue  # already has a seeded photo
+        keywords = PRODUCT_PHOTOS.get(row.product_name)
+        slug = _slugify(row.product_name)
+        dest = os.path.join(PRODUCT_IMG_DIR, f"{slug}.jpg")
+        if keywords and not os.path.exists(dest):
+            try:
+                url = f"https://loremflickr.com/480/480/{keywords}?lock={row.product_id}"
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "Mozilla/5.0 (Shongkho demo seeder)"},
+                )
+                with urllib.request.urlopen(req, timeout=20) as resp, open(dest, "wb") as out:
+                    out.write(resp.read())
+            except Exception as exc:  # noqa: BLE001 — offline must not crash seeding
+                print(f"  photo unavailable for {row.product_name} ({exc.__class__.__name__})")
+        if os.path.exists(dest) and _valid_image(dest):
+            row.photo = f"/static/products/{slug}.jpg"
+        else:
+            row.photo = _fallback_tile(row.product_name, row.category)
+        updated += 1
+    db.commit()
+    print(f"Product photos: {updated} assigned (real downloads + fallback tiles)")
 
 
 def _ensure_portraits() -> dict:
@@ -180,7 +284,7 @@ def seed(force: bool = False) -> None:
     Session = get_session_factory()
     db = Session()
 
-    owner_row = db.query(models.User).filter(models.User.phone_number == "edwinzaman").first()
+    owner_row = db.query(models.User).filter(models.User.phone_number == "01711111100").first()
 
     if owner_row and not force:
         sales_count = db.query(models.Sale).filter(
@@ -221,7 +325,7 @@ def seed(force: bool = False) -> None:
         return photos.get(slug) or svg_avatar(name, idx)
 
     edwin, _ = _ensure_user(
-        db, name="Edwin Zaman", phone="edwinzaman", role="owner",
+        db, name="Edwin Zaman", phone="01711111100", role="owner",
         password=PASSWORD, photo=photo_or_initial("edwin", "Edwin", 0),
     )
     staff = []
@@ -234,7 +338,7 @@ def seed(force: bool = False) -> None:
             photo=photo_or_initial(slug, spec["name"], i + 1),
         )
         staff.append((emp, spec))
-    print(f"Owner: Edwin Zaman (login: edwinzaman / {PASSWORD})")
+    print(f"Owner: Edwin Zaman (login: 01711111100 / {PASSWORD})")
     for emp, _ in staff:
         print(f"  Employee: {emp.name} ({emp.phone_number})")
 
@@ -469,7 +573,7 @@ def seed(force: bool = False) -> None:
 
     print(f"Sales created: {made} across {days} days "
           f"({start.isoformat()} -> {today.isoformat()})")
-    print("Done. Log in as edwinzaman / shongkho123 and open Analytics.")
+    print("Done. Log in as 01711111100 / shongkho123 and open Analytics.")
     print("Chatbot test questions this data answers well:")
     print("  - Who is selling the most today? / this week?")
     print("  - Which product should we push more this week?")

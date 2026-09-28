@@ -159,7 +159,7 @@ fabricated +∞.
 | `/api/v1/analytics/run/{id}/status` | GET | owner | `{status, failure_reason, ...}` — poll this |
 | `/api/v1/analytics/dashboard?period=week` | GET | owner | latest completed snapshot per section |
 
-## Demo data (edwinzaman store)
+## Demo data (Edwin Zaman's store)
 
 A seeder populates a realistic store so every period view has real
 shape (weekday/weekend patterns, lunch+evening peaks, per-employee
@@ -175,8 +175,8 @@ What you get:
 
 | Account | Login | Password |
 |---|---|---|
-| Edwin Zaman (owner) | `edwinzaman` | `shongkho123` |
-| Rahim Uddin, Karim Ahmed, Sumi Akter, Tanvir Hasan (employees) | `01711111101`…`04` | `shongkho123` |
+| Edwin Zaman (owner) | `01711111100` | `shongkho123` |
+| Rahim Uddin, Karim Ahmed, Sumi Akter, Tanvir Hasan, Nusrat Jahan, Jahangir Alam, Mim Rahman (employees) | `01711111101`…`07` | `shongkho123` |
 
 Plus 12 products, 13 customers, and ~3,600 sales across ~4 months
 ending today. Employees get SVG initial-avatars seeded into
