@@ -119,7 +119,7 @@ function MyCommissionCard({ commission }) {
     return (
       <div className="card commission-card">
         <div className="card-title">💰 My Commission</div>
-        <p className="muted" style={{ margin: 0 }}>
+        <p className="muted m-0">
           No commission policy yet — ask the owner to set one. You keep your
           monthly salary either way.
         </p>
@@ -129,7 +129,7 @@ function MyCommissionCard({ commission }) {
   return (
     <div className="card commission-card">
       <div className="card-title">💰 My Commission</div>
-      <div className="stat-grid" style={{ marginBottom: '0.5rem' }}>
+      <div className="stat-grid mb-2">
         <div className="card stat-card">
           <div className="stat-label">This month</div>
           <div className="stat-value">{fmtMoney(commission.month_commission)}</div>
@@ -146,7 +146,7 @@ function MyCommissionCard({ commission }) {
           </div>
         </div>
       </div>
-      <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+      <p className="muted m-0 text-sm">
         Policy: {commission.rate}% of the {commission.basis} you generate · updates
         live as you sell.
       </p>

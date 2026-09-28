@@ -435,7 +435,7 @@ export default function Staff() {
                 const perf = perfFor(tabTarget.user_id)
                 if (!perf) return <p className="muted">No sales recorded yet.</p>
                 return (
-                  <div className="stat-grid" style={{ marginTop: '0.75rem' }}>
+                  <div className="stat-grid mt-3">
                     <StatCard label="Transactions (all-time)" value={perf.total_sales} />
                     <StatCard label="Revenue generated" value={fmtMoney(perf.total_revenue)} tone="revenue" />
                     <StatCard label="Profit generated" value={fmtMoney(perf.total_profit)} tone="profit" />
@@ -453,7 +453,7 @@ export default function Staff() {
           {tab === 'warnings' && (
             <div className="staff-tabbody">
               <div className="staff-tabbody-head">
-                <p className="muted" style={{ margin: 0 }}>
+                <p className="muted m-0">
                   Formal warnings are visible to the employee on their own dashboard.
                 </p>
                 <Button variant="danger" size="sm" onClick={() => { setWarnOpen(true); setWarnError(null) }}>
@@ -481,7 +481,7 @@ export default function Staff() {
           {/* ---- Commission tab ---- */}
           {tab === 'commission' && (
             <div className="staff-tabbody">
-              <p className="muted" style={{ marginTop: 0 }}>
+              <p className="muted mt-0">
                 Commission is a percentage of the revenue <em>or</em> profit this employee
                 generates — your choice. It is computed live from their sales and shows on
                 their dashboard immediately.

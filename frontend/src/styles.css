@@ -58,6 +58,17 @@
   --success-bg: #e5f4ec;
   --info-bg: #eaf3f0;
 
+  /* System-layer support: on-brand text, state triads, alt surface */
+  --on-brand: #ffffff;
+  --on-brand-muted: #d9e8e2;
+  --surface-alt: #eef4f1;
+  --negative-strong: #a93226;
+  --negative-border: #fecaca;
+  --positive-strong: #166534;
+  --positive-border: #bbf7d0;
+  --warning-strong: #92400e;
+  --warning-border: #fde68a;
+
   /* Spacing scale (4px base) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -194,7 +205,7 @@ a:hover { text-decoration: underline; }
 }
 
 .navbar-links a.active {
-  background: #e8effd;
+  background: var(--brand-100);
   color: var(--primary);
 }
 
@@ -345,7 +356,7 @@ a:hover { text-decoration: underline; }
 
 .segmented-active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .segmented-disabled {
@@ -402,17 +413,17 @@ a:hover { text-decoration: underline; }
   height: 30px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--surface, #fff);
+  border: 2px solid var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-brand);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .race-avatar-lead {
-  border-color: var(--warning, #f59e0b);
+  border-color: var(--warning);
 }
 
 .race-flag {
@@ -420,7 +431,7 @@ a:hover { text-decoration: underline; }
 }
 
 .race-tooltip {
-  background: var(--surface, #fff);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.5rem 0.75rem;
@@ -481,9 +492,9 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
 }
 
-.rank-1 { color: #d97706; }
+.rank-1 { color: var(--color-orders); }
 .rank-2 { color: var(--muted); }
-.rank-3 { color: #b45309; }
+.rank-3 { color: var(--color-orders); }
 
 .link-btn {
   background: none;
@@ -534,7 +545,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--primary);
   border-radius: 8px;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 0.95rem;
   font-weight: 500;
   cursor: pointer;
@@ -545,7 +556,7 @@ a:hover { text-decoration: underline; }
   background: var(--primary-dark);
   border-color: var(--primary-dark);
   text-decoration: none;
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .btn:disabled {
@@ -578,8 +589,8 @@ a:hover { text-decoration: underline; }
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
-  border-color: #b91c1c;
+  background: var(--negative-strong);
+  border-color: var(--negative-strong);
 }
 
 .btn-sm {
@@ -704,14 +715,14 @@ a:hover { text-decoration: underline; }
 
 .alert-error {
   background: var(--danger-bg);
-  color: #991b1b;
-  border-color: #fecaca;
+  color: var(--negative-strong);
+  border-color: var(--negative-border);
 }
 
 .alert-success {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #bbf7d0;
+  background: var(--success-bg);
+  color: var(--positive-strong);
+  border-color: var(--positive-border);
 }
 
 .alert-dismiss {
@@ -757,7 +768,7 @@ a:hover { text-decoration: underline; }
 }
 
 .table tbody tr:hover {
-  background: #f4f9f7;
+  background: var(--brand-50);
 }
 
 .cell-strong {
@@ -811,8 +822,8 @@ a:hover { text-decoration: underline; }
 }
 
 .stat-warning {
-  border-color: #f59e0b;
-  background: #fffbeb;
+  border-color: var(--warning);
+  background: var(--warning-bg);
 }
 
 .dashboard-columns {
@@ -859,18 +870,18 @@ a:hover { text-decoration: underline; }
 }
 
 .stock-ok {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--success-bg);
+  color: var(--positive-strong);
 }
 
 .stock-low {
   background: var(--warning-bg);
-  color: #92400e;
+  color: var(--warning-strong);
 }
 
 .stock-out {
   background: var(--danger-bg);
-  color: #991b1b;
+  color: var(--negative-strong);
 }
 
 .role-badge {
@@ -883,13 +894,13 @@ a:hover { text-decoration: underline; }
 }
 
 .role-owner {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: var(--brand-100);
+  color: var(--brand-800);
 }
 
 .role-employee {
-  background: #e0f2fe;
-  color: #075985;
+  background: var(--neutral-bg);
+  color: var(--neutral);
 }
 
 /* ------------------------------------------------------------
@@ -1029,14 +1040,14 @@ a:hover { text-decoration: underline; }
 
 .product-card-flag.flag-out {
   background: var(--danger-bg);
-  color: #991b1b;
-  border-color: #fecaca;
+  color: var(--negative-strong);
+  border-color: var(--negative-border);
 }
 
 .product-card-flag.flag-low {
   background: var(--warning-bg);
-  color: #92400e;
-  border-color: #fde68a;
+  color: var(--warning-strong);
+  border-color: var(--warning-border);
 }
 
 .product-card-name {
@@ -1183,7 +1194,7 @@ a:hover { text-decoration: underline; }
   min-height: 0;
   overflow-y: auto;
   padding: 1rem 1.25rem;
-  background: #f0f2f5;
+  background: var(--surface-alt);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1198,7 +1209,7 @@ a:hover { text-decoration: underline; }
 .chat-day {
   align-self: center;
   background: var(--border-strong);
-  color: #4b5563;
+  color: var(--muted);
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.2rem 0.8rem;
@@ -1249,7 +1260,7 @@ a:hover { text-decoration: underline; }
 }
 
 .chat-bubble-own {
-  background: #d9fdd3;
+  background: var(--success-bg);
   border-bottom-right-radius: 4px;
 }
 
@@ -1261,7 +1272,7 @@ a:hover { text-decoration: underline; }
 .chat-sender {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #0a7ea4;
+  color: var(--brand-700);
   margin-bottom: 0.1rem;
   display: flex;
   align-items: center;
@@ -1269,15 +1280,15 @@ a:hover { text-decoration: underline; }
 }
 
 .chat-sender-owner {
-  color: #7c3aed;
+  color: var(--color-profit);
 }
 
 .chat-owner-tag {
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
-  background: #ede9fe;
-  color: #5b21b6;
+  background: var(--brand-100);
+  color: var(--brand-800);
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
 }
@@ -1345,7 +1356,7 @@ a:hover { text-decoration: underline; }
 
 /* Quoted message (inside bubble + composer preview) */
 .chat-quote {
-  border-left: 4px solid #06cf9c;
+  border-left: 4px solid var(--brand-400);
   background: rgba(6, 207, 156, 0.08);
   border-radius: 6px;
   padding: 0.25rem 0.5rem;
@@ -1356,12 +1367,12 @@ a:hover { text-decoration: underline; }
 .chat-quote-head {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #069669;
+  color: var(--positive);
 }
 
 .chat-quote-body {
   font-size: 0.82rem;
-  color: #4b5563;
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1420,7 +1431,7 @@ a:hover { text-decoration: underline; }
   border-radius: 50%;
   border: none;
   background: var(--success);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 1.05rem;
   cursor: pointer;
   display: flex;
@@ -1649,7 +1660,7 @@ form .modal-footer {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: #e8effd;
+  background: var(--brand-100);
   color: var(--primary);
   display: flex;
   align-items: center;
@@ -1675,7 +1686,7 @@ form .modal-footer {
 .avatar-xl { width: 120px; height: 120px; font-size: 2.4rem; border-radius: 14px; }
 
 .avatar-product {
-  background: #fef3c7;
+  background: var(--warning-bg);
 }
 
 /* Person cell in tables / lists */
@@ -1829,12 +1840,12 @@ form .modal-footer {
   margin: 0;
   padding: 0.6rem 0.85rem;
   border-radius: 12px;
-  background: var(--surface-2, #f3f4f6);
+  background: var(--surface-alt);
   white-space: pre-wrap;
 }
 
 .assistant-turn.assistant-user .assistant-msg {
-  background: var(--primary-soft, #dbeafe);
+  background: var(--brand-100);
 }
 
 .assistant-block {
@@ -1911,19 +1922,19 @@ form .modal-footer {
 }
 
 .staff-tab:hover {
-  background: var(--bg, #f3f4f6);
-  color: var(--text, #111827);
+  background: var(--bg);
+  color: var(--text);
 }
 
 .staff-tab-active,
 .staff-tab-active:hover {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .warn-badge {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-brand);
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
@@ -1958,8 +1969,8 @@ form .modal-footer {
 }
 
 .warn-item {
-  border: 1px solid var(--danger-bg, #fee2e2);
-  background: var(--danger-bg, #fee2e2);
+  border: 1px solid var(--danger-bg);
+  background: var(--danger-bg);
   border-radius: 8px;
   padding: 0.6rem 0.8rem;
 }
@@ -1977,7 +1988,7 @@ form .modal-footer {
 }
 
 .warn-card .warn-item {
-  background: #fff;
+  background: var(--surface);
 }
 
 .commission-form {
@@ -2005,12 +2016,12 @@ form .modal-footer {
   margin-top: 0.75rem;
   padding: 0.6rem 0.8rem;
   border-radius: 8px;
-  background: var(--bg, #f3f4f6);
+  background: var(--bg);
   font-size: 0.92rem;
 }
 
 .commission-status.commission-on {
-  background: #dcfce7;
+  background: var(--success-bg);
 }
 
 /* EmployeeRace: revenue + profit together in the final standings */
@@ -2026,7 +2037,7 @@ form .modal-footer {
 }
 
 tr.row-active {
-  background: var(--bg, #f3f4f6);
+  background: var(--bg);
 }
 
 /* =========================================================
@@ -2070,7 +2081,7 @@ tr.row-active {
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 1rem;
-  color: var(--text, #0f172a);
+  color: var(--text);
 }
 
 .protik-hero-points {
@@ -2081,7 +2092,7 @@ tr.row-active {
   flex-direction: column;
   gap: 0.35rem;
   font-size: 1.15rem;
-  color: var(--text, #0f172a);
+  color: var(--text);
 }
 
 .protik-hero-points li::before {
@@ -2203,7 +2214,7 @@ tr.row-active {
 
 .segmented-active {
   background: var(--brand-700);
-  color: #fff;
+  color: var(--on-brand);
   font-weight: 600;
 }
 
@@ -2240,9 +2251,9 @@ tr.row-active {
 /* Ranked rows keep a faint tint — position reads at a glance. */
 .table tr.rank-row-1 { background: var(--brand-50); }
 
-.rank-1 { color: #b45309; }
+.rank-1 { color: var(--color-orders); }
 .rank-2 { color: var(--muted); }
-.rank-3 { color: #a16207; }
+.rank-3 { color: var(--color-orders); }
 
 /* ---- Employee race: readable legend rows, consistent bars ---- */
 .race-legend {
@@ -2261,7 +2272,7 @@ tr.row-active {
 }
 
 .race-legend li:nth-child(odd) {
-  background: #f6faf8;
+  background: var(--brand-50);
 }
 
 .race-legend strong {

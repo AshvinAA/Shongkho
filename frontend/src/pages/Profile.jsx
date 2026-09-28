@@ -134,7 +134,7 @@ export default function Profile() {
             onError={setError}
           />
 
-          <div className="form-group" style={{ marginTop: '1rem' }}>
+          <div className="form-group mt-4">
             <label className="form-label">Role</label>
             <p>
               <span className={`role-badge role-${profile.user_type}`}>{profile.user_type}</span>

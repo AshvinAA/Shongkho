@@ -3,6 +3,16 @@
    Loaded AFTER styles.css; consumes tokens from :root only.
    ============================================================ */
 
+/* ============================================================
+   Micro utilities — token-based spacing/size (replaces inline styles)
+   ============================================================ */
+.m-0 { margin: 0; }
+.mt-0 { margin-top: 0; }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mb-2 { margin-bottom: var(--space-2); }
+.text-sm { font-size: var(--text-sm); }
+
 /* ---------- Button ---------- */
 .ui-btn {
   display: inline-flex;
@@ -28,7 +38,7 @@
 }
 .ui-btn-primary {
   background: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .ui-btn-primary:hover:not(:disabled) {
   background: var(--brand-700);
@@ -53,10 +63,10 @@
 }
 .ui-btn-danger {
   background: var(--negative);
-  color: #fff;
+  color: var(--on-brand);
 }
 .ui-btn-danger:hover:not(:disabled) {
-  background: #a93226;
+  background: var(--negative-strong);
 }
 .ui-btn-sm {
   height: 32px;
@@ -189,7 +199,7 @@
 }
 .ui-segmented-active {
   background: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .ui-segmented-sm .ui-segmented-btn {
   height: 26px;
@@ -652,7 +662,7 @@
   width: 240px;
   flex-shrink: 0;
   background: var(--brand-950);
-  color: #d9e8e2;
+  color: var(--on-brand-muted);
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -681,13 +691,13 @@
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   background: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .shell-sidebar-brand-name {
   font-weight: 700;
   font-size: var(--text-md);
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--on-brand);
   white-space: nowrap;
 }
 .shell-sidebar-toggle {
@@ -701,7 +711,7 @@
   margin-left: auto;
 }
 .shell-sidebar-toggle:hover {
-  color: #fff;
+  color: var(--on-brand);
   background: rgba(255, 255, 255, 0.08);
 }
 .shell-sidebar-toggle:focus-visible {
@@ -749,7 +759,7 @@
 }
 .shell-nav-link:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  color: var(--on-brand);
 }
 .shell-nav-link:focus-visible {
   outline: none;
@@ -758,7 +768,7 @@
 .shell-nav-active,
 .shell-nav-active:hover {
   background: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .shell-sidebar-foot {
   padding: var(--space-3);
@@ -1068,7 +1078,7 @@
 .pos2-chip-active {
   background: var(--brand-600);
   border-color: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .pos2-grid {
   display: grid;
@@ -1342,7 +1352,7 @@
 .pos2-pay-active {
   background: var(--brand-600);
   border-color: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .pos2-charge.ui-btn {
   width: 100%;
@@ -1495,7 +1505,7 @@
 }
 .race-rank-1 {
   background: var(--brand-600);
-  color: #fff;
+  color: var(--on-brand);
 }
 .race-row-name {
   font-weight: 600;

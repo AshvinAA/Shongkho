@@ -146,7 +146,7 @@ export default function Customers() {
           </button>
         </form>
         {lookupError && (
-          <div className="alert alert-error" role="alert" style={{ marginTop: '0.75rem' }}>
+          <div className="alert alert-error mt-3" role="alert">
             {lookupError}
           </div>
         )}
@@ -166,7 +166,7 @@ export default function Customers() {
               </button>
             </div>
 
-            <div className="card-title" style={{ marginTop: '1rem' }}>Purchase History</div>
+            <div className="card-title mt-4">Purchase History</div>
             {historyLoading ? (
               <p className="muted">Loading history…</p>
             ) : !history || history.length === 0 ? (
@@ -201,7 +201,7 @@ export default function Customers() {
 
       {/* ---------------- Directory (owner) ---------------- */}
       <RoleGate allowedRoles={['owner']}>
-        <div className="card" style={{ marginTop: '1rem' }}>
+        <div className="card mt-4">
           <div className="card-title">All Customers ({customers.length})</div>
           {loading ? (
             <div className="page-loading" role="status">
