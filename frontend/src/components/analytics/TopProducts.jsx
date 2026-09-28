@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { fmtMoney } from '../../utils/format.js'
-import { DeltaChip } from './common.jsx'
+import { DeltaChip, SegmentedControl } from './common.jsx'
+
+const METRIC_OPTIONS = [
+  { value: 'revenue', label: 'Revenue' },
+  { value: 'profit', label: 'Profit' },
+]
 
 /**
  * Top products — Track A "products" snapshot: a ranked table with a
@@ -19,8 +24,13 @@ export default function TopProducts({ data }) {
   return (
     <div className="analytics-panel">
       <div className="analytics-panel-head">
-        <h3 className="card-title">Top products — ranked by {metric}</h3>
-        <DeltaChipNeutral />
+        <h3 className="card-title">Top products</h3>
+        <SegmentedControl
+          options={METRIC_OPTIONS}
+          value={metric}
+          onChange={setMetric}
+          ariaLabel="Rank products by"
+        />
       </div>
 
       {rows.length === 0 ? (
@@ -32,39 +42,27 @@ export default function TopProducts({ data }) {
               <tr>
                 <th>#</th>
                 <th>Product</th>
-                <th>Units</th>
-                <th>{metric === 'revenue' ? 'Revenue' : 'Profit'}</th>
-                <th>Margin</th>
-                <th>Units vs last {data.period}</th>
+                <th className="num">Units</th>
+                <th className="num">{metric === 'revenue' ? 'Revenue' : 'Profit'}</th>
+                <th className="num">Margin</th>
+                <th className="num">Units vs last {data.period}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={row.product_id}>
+                <tr key={row.product_id} className={i === 0 ? 'rank-row-1' : undefined}>
                   <td className={i < 3 ? `rank rank-${i + 1}` : 'rank'}>{i + 1}</td>
                   <td>{row.name}</td>
-                  <td>{row.units}</td>
-                  <td><strong>{fmtMoney(row[metric])}</strong></td>
-                  <td>{row.margin_pct === null || row.margin_pct === undefined ? '—' : `${row.margin_pct}%`}</td>
-                  <td><DeltaChip value={row.units_change_pct} /></td>
+                  <td className="num">{row.units}</td>
+                  <td className="num"><strong>{fmtMoney(row[metric])}</strong></td>
+                  <td className="num">{row.margin_pct === null || row.margin_pct === undefined ? '—' : `${row.margin_pct}%`}</td>
+                  <td className="num"><DeltaChip value={row.units_change_pct} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-
-      <div className="switch-hint muted">
-        Showing {metric} ranking ·{' '}
-        <button type="button" className="link-btn" onClick={() => setMetric(metric === 'revenue' ? 'profit' : 'revenue')}>
-          switch to {metric === 'revenue' ? 'profit' : 'revenue'}
-        </button>
-      </div>
     </div>
   )
-}
-
-/** Placeholder chip — the real period delta lives on the sales panel. */
-function DeltaChipNeutral() {
-  return <span className="muted">Units trend compares to the previous {`period`}</span>
 }

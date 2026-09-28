@@ -4,22 +4,104 @@
    ============================================================ */
 
 :root {
-  --bg: #f4f6f9;
+  /* ============================================================
+     Design tokens v2 — deep teal/green identity.
+     Semantic roles are the ONLY colors components should consume;
+     raw palette steps exist so charts/shades stay derivable.
+     Legacy names (--primary, --success…) alias into this system so
+     every screen rebrands together.
+     ============================================================ */
+
+  /* Surfaces & text (soft mist-green neutrals) */
+  --bg: #f2f7f5;
   --surface: #ffffff;
-  --border: #e3e8ef;
-  --text: #1f2937;
-  --muted: #6b7280;
+  --border: #dde8e3;
+  --border-strong: #c9d9d2;
+  --text: #152420;
+  --muted: #5c6f68;
 
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --success: #16a34a;
-  --success-dark: #15803d;
-  --danger: #dc2626;
-  --warning-bg: #fef3c7;
-  --danger-bg: #fee2e2;
+  /* Brand — deep teal family ("money in, kept safe") */
+  --brand-50: #effaf6;
+  --brand-100: #d7f0e7;
+  --brand-200: #aee0d1;
+  --brand-300: #7ccab4;
+  --brand-400: #45ac93;
+  --brand-500: #2a8d78;
+  --brand-600: #1f7263;
+  --brand-700: #1a5c51;
+  --brand-800: #17493f;
+  --brand-900: #123a32;
+  --brand-950: #0b2a25;
 
+  /* Semantic data roles (revenue ≠ profit ≠ orders) */
+  --color-revenue: var(--brand-700);
+  --color-profit: #2f855a;
+  --color-orders: #b45309;
+
+  /* Deltas & states — hue + tint bg survive color-blindness/projectors */
+  --positive: #2f855a;
+  --positive-bg: rgba(47, 133, 90, 0.12);
+  --negative: #c0392b;
+  --negative-bg: rgba(192, 57, 43, 0.1);
+  --neutral: #5c6f68;
+  --neutral-bg: rgba(92, 111, 104, 0.12);
+
+  /* Legacy aliases (pre-v2 names — do not use in new code) */
+  --primary: var(--brand-700);
+  --primary-dark: var(--brand-900);
+  --success: var(--color-profit);
+  --success-dark: #276b49;
+  --danger: var(--negative);
+  --warning: #b45309;
+  --warning-bg: #fdf3dd;
+  --danger-bg: #fbeae7;
+  --success-bg: #e5f4ec;
+  --info-bg: #eaf3f0;
+
+  /* Spacing scale (4px base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 3rem;
+
+  /* Type scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.85rem;
+  --text-base: 0.95rem;
+  --text-md: 1.05rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.6rem;
+  --text-2xl: 2rem;
+  --text-3xl: 2.6rem;
+
+  /* Radius & elevation */
+  --radius-sm: 6px;
   --radius: 10px;
-  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --radius-lg: 14px;
+  --shadow-1: 0 1px 2px rgba(18, 58, 50, 0.05), 0 1px 3px rgba(18, 58, 50, 0.08);
+  --shadow-2: 0 4px 14px rgba(18, 58, 50, 0.12);
+  --shadow: var(--shadow-1);
+  --ring: 0 0 0 3px rgba(42, 141, 120, 0.22);
+
+  /* Chart tokens — resolved to concrete strings by chartPalette.js
+     (SVG attributes can't read var()); semantic roles + categorical
+     series (distinct hues, AA on white). */
+  --chart-revenue: var(--color-revenue);
+  --chart-profit: var(--color-profit);
+  --chart-orders: var(--color-orders);
+  --chart-neutral: var(--neutral);
+  --chart-grid: #e3efe9;
+  --chart-axis: #5c6f68;
+  --chart-series-1: #1f7263;
+  --chart-series-2: #b45309;
+  --chart-series-3: #6d28d9;
+  --chart-series-4: #0e7490;
+  --chart-series-5: #be185d;
+  --chart-series-6: #4d7c0f;
 }
 
 * {
@@ -191,7 +273,7 @@ a:hover { text-decoration: underline; }
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }
 
 .stat-value {
@@ -281,18 +363,18 @@ a:hover { text-decoration: underline; }
 }
 
 .delta-up {
-  background: rgba(22, 163, 74, 0.12);
-  color: var(--success, #16a34a);
+  background: var(--positive-bg);
+  color: var(--positive);
 }
 
 .delta-down {
-  background: rgba(220, 38, 38, 0.12);
-  color: var(--danger, #dc2626);
+  background: var(--negative-bg);
+  color: var(--negative);
 }
 
 .delta-neutral {
   background: rgba(107, 114, 128, 0.12);
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }
 
 .delta-label {
@@ -367,7 +449,7 @@ a:hover { text-decoration: underline; }
 .race-subtitle {
   margin: 0 0 0.5rem;
   font-size: 0.9rem;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }
 
 .race-line-legend {
@@ -395,11 +477,11 @@ a:hover { text-decoration: underline; }
 /* Top products ranking badges */
 .rank {
   font-weight: 700;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }
 
 .rank-1 { color: #d97706; }
-.rank-2 { color: #6b7280; }
+.rank-2 { color: var(--muted); }
 .rank-3 { color: #b45309; }
 
 .link-btn {
@@ -421,9 +503,9 @@ a:hover { text-decoration: underline; }
 }
 
 .alert-info {
-  background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  color: var(--primary, #2563eb);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-200);
+  color: var(--brand-800);
 }
 
 .card {
@@ -476,7 +558,7 @@ a:hover { text-decoration: underline; }
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: #e8effd;
+  background: var(--brand-50);
 }
 
 .btn-success {
@@ -530,7 +612,7 @@ a:hover { text-decoration: underline; }
 .form-control {
   width: 100%;
   padding: 0.5rem 0.7rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -541,7 +623,7 @@ a:hover { text-decoration: underline; }
 .form-control:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow: var(--ring);
 }
 
 .form-control.is-invalid {
@@ -674,7 +756,7 @@ a:hover { text-decoration: underline; }
 }
 
 .table tbody tr:hover {
-  background: #f8fafc;
+  background: #f4f9f7;
 }
 
 .cell-strong {
@@ -866,7 +948,7 @@ a:hover { text-decoration: underline; }
 
 .product-tile:hover:not(:disabled) {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: var(--ring);
 }
 
 .product-tile.disabled {
@@ -908,7 +990,7 @@ a:hover { text-decoration: underline; }
 
 .product-card:hover {
   border-color: var(--primary);
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.15);
+  box-shadow: var(--shadow-2);
   transform: translateY(-2px);
 }
 
@@ -1091,7 +1173,7 @@ a:hover { text-decoration: underline; }
   height: 10px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.15);
+  box-shadow: var(--ring);
   align-self: center;
 }
 
@@ -1114,7 +1196,7 @@ a:hover { text-decoration: underline; }
 
 .chat-day {
   align-self: center;
-  background: #e5e7eb;
+  background: var(--border-strong);
   color: #4b5563;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1250,7 +1332,7 @@ a:hover { text-decoration: underline; }
 }
 
 .chat-reply-btn:hover {
-  background: #e5e7eb;
+  background: var(--border-strong);
   color: var(--text);
 }
 
@@ -1319,7 +1401,7 @@ a:hover { text-decoration: underline; }
 .chat-input {
   flex: 1;
   padding: 0.6rem 0.9rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -1328,7 +1410,7 @@ a:hover { text-decoration: underline; }
 .chat-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: var(--ring);
 }
 
 .chat-send {
@@ -1383,7 +1465,7 @@ a:hover { text-decoration: underline; }
 .qty-input {
   width: 64px;
   padding: 0.3rem 0.4rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: 0.9rem;
 }
@@ -1417,7 +1499,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #e8effd 0%, #f4f6f9 55%);
+  background: linear-gradient(135deg, var(--brand-100) 0%, var(--bg) 55%);
 }
 
 .auth-card {
@@ -1703,7 +1785,7 @@ form .modal-footer {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
   margin: 0.25rem 0 0.5rem;
 }
 
@@ -1800,7 +1882,7 @@ form .modal-footer {
   gap: 1rem;
   flex-wrap: wrap;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid var(--border);
 }
 
 .staff-tabperson {
@@ -1821,7 +1903,7 @@ form .modal-footer {
   border-radius: 999px;
   font-size: 0.9rem;
   cursor: pointer;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1834,12 +1916,12 @@ form .modal-footer {
 
 .staff-tab-active,
 .staff-tab-active:hover {
-  background: var(--primary, #2563eb);
+  background: var(--primary);
   color: #fff;
 }
 
 .warn-badge {
-  background: var(--danger, #dc2626);
+  background: var(--danger);
   color: #fff;
   border-radius: 999px;
   font-size: 0.72rem;
@@ -1969,9 +2051,9 @@ tr.row-active {
   justify-content: center;
   background:
     radial-gradient(1200px 400px at 20% -10%,
-      rgba(37, 99, 235, 0.08), transparent),
-    var(--bg, #f8fafc);
-  border: 1px solid var(--border, #e5e7eb);
+      rgba(42, 141, 120, 0.09), transparent),
+    var(--bg);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 2rem 2.25rem;
   margin-bottom: 1.25rem;
@@ -2003,7 +2085,7 @@ tr.row-active {
 
 .protik-hero-points li::before {
   content: '→ ';
-  color: var(--primary, #2563eb);
+  color: var(--primary);
   font-weight: 700;
 }
 
@@ -2046,4 +2128,193 @@ tr.row-active {
 .protik-hero-lang-note {
   font-size: 0.9rem;
   margin-top: 0.25rem;
+}
+
+/* ============================================================
+   Design system v2 — Analytics BI layer (deep teal identity)
+   Number-first hierarchy: headline stat -> trend -> detail.
+   Numeric display uses tabular figures everywhere money shows.
+   ============================================================ */
+
+/* ---- Numeric typography: aligned money columns everywhere ---- */
+.stat-value,
+.stat-box .stat-value,
+.stat-card .stat-value,
+.table td,
+.table tfoot td,
+.delta-chip,
+.race-standing-figures,
+.best-list li {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Panel: the BI card ---- */
+.analytics-panel {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+/* One header pattern: title left, context right. */
+.analytics-panel-head .card-title {
+  margin-bottom: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Headline stat: confident, metric-colored, tabular ---- */
+.stat-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+
+.stat-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+/* Metric role colors the headline number (revenue teal, profit green,
+   orders amber) without touching layout. */
+.stat-box.stat-revenue .stat-value { color: var(--color-revenue); }
+.stat-box.stat-profit .stat-value { color: var(--color-profit); }
+.stat-box.stat-orders .stat-value { color: var(--color-orders); }
+
+.stat-sub {
+  font-size: var(--text-sm);
+}
+
+/* ---- Segmented control: crisper active state ---- */
+.segmented {
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.segmented-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.segmented-active {
+  background: var(--brand-700);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---- Tables: BI density, right-aligned numerics ---- */
+.table {
+  font-size: var(--text-sm);
+}
+
+.table th {
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.table td {
+  padding: var(--space-2) var(--space-3);
+}
+
+.table .num,
+.table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th.num {
+  text-align: right;
+}
+
+.table td strong {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* Ranked rows keep a faint tint — position reads at a glance. */
+.table tr.rank-row-1 { background: var(--brand-50); }
+
+.rank-1 { color: #b45309; }
+.rank-2 { color: var(--muted); }
+.rank-3 { color: #a16207; }
+
+/* ---- Employee race: readable legend rows, consistent bars ---- */
+.race-legend {
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+}
+
+.race-legend li {
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.race-legend li + li {
+  margin-top: 2px;
+}
+
+.race-legend li:nth-child(odd) {
+  background: #f6faf8;
+}
+
+.race-legend strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.race-standing-figures {
+  font-size: var(--text-sm);
+  gap: 0.5rem;
+}
+
+.race-standing-figures strong {
+  font-weight: 650;
+}
+
+/* Leader flag chip: quiet, semantic */
+.race-leader-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.race-leader-chip strong {
+  color: var(--text);
+}
+
+.race-tooltip {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Best-period lists (SalesTrend footer) ---- */
+.best-list li {
+  padding: var(--space-1) 0 var(--space-2);
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+.best-list strong {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Page chrome for the dashboard ---- */
+.analytics-page .page-header h1 {
+  letter-spacing: -0.02em;
+}
+
+.analytics-page .page-header .muted {
+  font-size: var(--text-sm);
+}
+
+.analytics-actions .segmented + .segmented {
+  margin-left: var(--space-2);
 }

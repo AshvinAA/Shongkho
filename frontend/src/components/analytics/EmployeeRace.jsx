@@ -4,9 +4,10 @@ import {
 } from 'recharts'
 import { fmtMoney } from '../../utils/format.js'
 import { DeltaChip } from './common.jsx'
+import { chartColor, chartSeries } from './chartPalette.js'
 import Avatar from '../Avatar.jsx'
 
-const LINE_COLORS = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2']
+const AXIS_TICK = { fontSize: 11, fill: 'var(--chart-axis, #5c6f68)' }
 
 /**
  * Employee race — Track A "employees" snapshot.
@@ -62,7 +63,7 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
     <div className="analytics-panel">
       <div className="analytics-panel-head">
         <h3 className="card-title">Employee race — {metric}</h3>
-        <span className="muted">
+        <span className="race-leader-chip">
           🏁 Leader: <strong>{leader?.name ?? '—'}</strong>
         </span>
       </div>
@@ -78,9 +79,9 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
               </h4>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={raceRows} margin={{ top: 18, right: 24, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e7eb)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtMoney(v)} width={72} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartColor('grid')} />
+                  <XAxis dataKey="label" tick={AXIS_TICK} interval="preserveStartEnd" stroke={chartColor('grid')} />
+                  <YAxis tick={AXIS_TICK} tickFormatter={(v) => fmtMoney(v)} width={72} stroke={chartColor('grid')} />
                   <Tooltip
                     formatter={(v, name) => {
                       const lane = lanes.find((l) => String(l.employee_id) === name)
@@ -131,9 +132,10 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
             <h4 className="race-subtitle">Final standings</h4>
             <ResponsiveContainer width="100%" height={Math.max(150, lanes.length * 52)}>
               <BarChart data={lanes} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e7eb)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => fmtMoney(v)} />
-                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColor('grid')} horizontal={false} />
+                <XAxis type="number" tick={AXIS_TICK} tickFormatter={(v) => fmtMoney(v)} stroke={chartColor('grid')} />
+                <YAxis type="category" dataKey="name" width={110}
+                  tick={{ fontSize: 12, fill: 'var(--chart-axis, #5c6f68)' }} stroke={chartColor('grid')} />
                 <Tooltip
                   formatter={(v) => fmtMoney(v)}
                   content={({ payload }) => {
@@ -150,7 +152,9 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
                     )
                   }}
                 />
-                <Bar dataKey="value" fill="var(--primary, #2563eb)" radius={[0, 6, 6, 0]} barSize={24}>
+                {/* The bar wears the metric's semantic color: teal revenue,
+                    green profit — same meaning as the headline stat. */}
+                <Bar dataKey="value" fill={chartColor(metric)} radius={[0, 6, 6, 0]} barSize={24}>
                   <LabelList dataKey="value" position="right" formatter={(v) => fmtMoney(v)} />
                 </Bar>
               </BarChart>
@@ -181,7 +185,7 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
 }
 
 function colorOf(i) {
-  return LINE_COLORS[i % LINE_COLORS.length]
+  return chartSeries(i)
 }
 
 /**
@@ -198,7 +202,7 @@ function AvatarDot({ cx, cy, photo, name }) {
       <clipPath id={clipId}>
         <circle cx={cx} cy={cy} r={r} />
       </clipPath>
-      <circle cx={cx} cy={cy} r={r + 2} fill="#fff" stroke="var(--border, #e5e7eb)" />
+      <circle cx={cx} cy={cy} r={r + 2} fill="#fff" stroke={chartColor('grid')} />
       {photo ? (
         <image
           href={photo}

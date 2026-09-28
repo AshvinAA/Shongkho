@@ -4,8 +4,9 @@ import {
 } from 'recharts'
 import { fmtMoney } from '../../utils/format.js'
 import { DeltaChip } from './common.jsx'
+import { chartColor } from './chartPalette.js'
 
-const COLORS = { revenue: 'var(--primary, #2563eb)', profit: 'var(--success, #16a34a)' }
+const AXIS_TICK = { fontSize: 11, fill: 'var(--chart-axis, #5c6f68)' }
 
 /**
  * Sales trend graph — Track A "sales" snapshot.
@@ -40,12 +41,12 @@ export default function SalesTrend({ data, metric = 'revenue' }) {
       </div>
 
       <div className="stat-row">
-        <div className="stat-box">
+        <div className={`stat-box stat-${metric}`}>
           <span className="stat-label">{metric === 'revenue' ? 'Revenue' : 'Profit'} this {data.period}</span>
           <span className="stat-value">{fmtMoney(data.current?.[metric])}</span>
           <span className="stat-sub muted">Prev: {fmtMoney(data.previous?.[metric])}</span>
         </div>
-        <div className="stat-box">
+        <div className="stat-box stat-orders">
           <span className="stat-label">Orders this {data.period}</span>
           <span className="stat-value">{data.current?.orders ?? 0}</span>
           <span className="stat-sub muted">Prev: {data.previous?.orders ?? 0}</span>
@@ -55,18 +56,18 @@ export default function SalesTrend({ data, metric = 'revenue' }) {
       <div className="chart-wrap">
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ top: 10, right: 16, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border, #e5e7eb)" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtMoney(v)} width={72} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartColor('grid')} />
+            <XAxis dataKey="name" tick={AXIS_TICK} interval="preserveStartEnd" stroke={chartColor('grid')} />
+            <YAxis tick={AXIS_TICK} tickFormatter={(v) => fmtMoney(v)} width={72} stroke={chartColor('grid')} />
             <Tooltip formatter={(v, key) => [fmtMoney(v), key]} />
             <Legend />
             {bestSpan && (
               <ReferenceArea x1={bestSpan.start} x2={bestSpan.end}
-                fill="var(--warning, #f59e0b)" fillOpacity={0.12} />
+                fill={chartColor('orders')} fillOpacity={0.1} />
             )}
-            <Line type="monotone" dataKey="revenue" stroke={COLORS.revenue}
+            <Line type="monotone" dataKey="revenue" stroke={chartColor('revenue')}
               strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="profit" stroke={COLORS.profit}
+            <Line type="monotone" dataKey="profit" stroke={chartColor('profit')}
               strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
