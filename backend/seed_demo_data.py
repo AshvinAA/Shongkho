@@ -32,12 +32,13 @@ import argparse
 import random
 import sys
 import os
+import urllib.request
 from datetime import date, datetime, time, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import models  # noqa: E402
-from database import get_engine, get_session_factory, init_db  # noqa: E402
+from database import get_engine, get_session_factory, init_db, BASE_DIR  # noqa: E402
 from services import hash_password  # noqa: E402
 
 PASSWORD = "shongkho123"
@@ -94,9 +95,45 @@ PRODUCTS = [
     {"name": "Mineral Water 1L",    "cost": 12,  "retail": 20,  "category": "Beverages", "pop": 0.90, "peak": None},
 ]
 
-# SVG avatars: tiny data-URIs with distinct bg colors + initials,
-# seeded into users.photo so EVERY page (navbar, race, staff) shows them.
-AVATAR_COLORS = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#7c3aed"]
+# -----------------------------------------------------------------
+# Portrait photos: fetched once into backend/static/avatars/ and
+# referenced by /static URL, so the demo works offline afterwards.
+# Falls back to the SVG-initial avatars when there is no internet.
+# -----------------------------------------------------------------
+PORTRAITS = {
+    # slug: (source URL, fallback initial, fallback color index)
+    "edwin":    ("https://randomuser.me/api/portraits/men/32.jpg", "E", 0),
+    "rahim":    ("https://randomuser.me/api/portraits/men/75.jpg", "R", 1),
+    "karim":    ("https://randomuser.me/api/portraits/men/41.jpg", "K", 2),
+    "sumi":     ("https://randomuser.me/api/portraits/women/65.jpg", "S", 3),
+    "tanvir":   ("https://randomuser.me/api/portraits/men/22.jpg", "T", 4),
+    "nusrat":   ("https://randomuser.me/api/portraits/women/44.jpg", "N", 0),
+    "jahangir": ("https://randomuser.me/api/portraits/men/68.jpg", "J", 1),
+    "mim":      ("https://randomuser.me/api/portraits/women/68.jpg", "M", 2),
+}
+
+AVATAR_DIR = os.path.join(BASE_DIR, "static", "avatars")
+
+
+def _ensure_portraits() -> dict:
+    """Download portraits once; return {slug: /static URL or None}."""
+    os.makedirs(AVATAR_DIR, exist_ok=True)
+    urls = {}
+    for slug, (source, _initial, _idx) in PORTRAITS.items():
+        dest = os.path.join(AVATAR_DIR, f"{slug}.jpg")
+        if not os.path.exists(dest):
+            try:
+                req = urllib.request.Request(
+                    source, headers={"User-Agent": "Mozilla/5.0 (Shongkho demo seeder)"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp, open(dest, "wb") as out:
+                    out.write(resp.read())
+                print(f"  portrait downloaded: {slug}.jpg")
+            except Exception as exc:  # offline / blocked -> fall back
+                print(f"  portrait unavailable for {slug} ({exc.__class__.__name__}) — using initials avatar")
+                dest = None
+        urls[slug] = f"/static/avatars/{slug}.jpg" if dest else None
+    return urls
 
 
 def svg_avatar(name: str, idx: int) -> str:
@@ -175,16 +212,26 @@ def seed(force: bool = False) -> None:
     # -----------------------------------------------------------
     # People
     # -----------------------------------------------------------
+    # -----------------------------------------------------------
+    # People (+ portrait photos where the download succeeded)
+    # -----------------------------------------------------------
+    photos = _ensure_portraits()
+
+    def photo_or_initial(slug, name, idx):
+        return photos.get(slug) or svg_avatar(name, idx)
+
     edwin, _ = _ensure_user(
         db, name="Edwin Zaman", phone="edwinzaman", role="owner",
-        password=PASSWORD, photo=svg_avatar("Edwin", 0),
+        password=PASSWORD, photo=photo_or_initial("edwin", "Edwin", 0),
     )
     staff = []
     for i, spec in enumerate(EMPLOYEES):
+        slug = spec["name"].split()[0].lower()
         emp, _ = _ensure_user(
             db, name=spec["name"], phone=spec["phone"], role="employee",
             password=PASSWORD, position=spec["position"], salary=spec["salary"],
-            employer_id=edwin.user_id, photo=svg_avatar(spec["name"], i + 1),
+            employer_id=edwin.user_id,
+            photo=photo_or_initial(slug, spec["name"], i + 1),
         )
         staff.append((emp, spec))
     print(f"Owner: Edwin Zaman (login: edwinzaman / {PASSWORD})")
@@ -214,7 +261,9 @@ def seed(force: bool = False) -> None:
     # -----------------------------------------------------------
     customers = []
     for i in range(12):
-        phone = f"018{i:09d}"[:11]
+        # 11 chars exactly and distinct from the walk-in (01800000000):
+        # the old f"018{i:09d}"[:11] collapsed ALL of these onto one phone.
+        phone = f"0182{i:07d}"
         row = db.query(models.Customer).filter(models.Customer.phone_number == phone).first()
         if not row:
             row = models.Customer(
@@ -329,6 +378,95 @@ def seed(force: bool = False) -> None:
         if day_offset % 15 == 14:
             db.commit()
     db.commit()
+
+    # -----------------------------------------------------------
+    # Group chat: a realistic team conversation (backdated)
+    # -----------------------------------------------------------
+    already_chatted = db.query(models.ChatMessage).filter(
+        models.ChatMessage.owner_id == edwin.user_id
+    ).count()
+    if force or already_chatted == 0:
+        print("Seeding group chat…")
+        by_name = {emp.name: emp for emp, _ in staff}
+        rahim = by_name["Rahim Uddin"]
+        karim = by_name["Karim Ahmed"]
+        sumi = by_name["Sumi Akter"]
+        tanvir = by_name["Tanvir Hasan"]
+        nusrat = by_name["Nusrat Jahan"]
+        jahangir = by_name["Jahangir Alam"]
+        mim = by_name["Mim Rahman"]
+
+        def _msg(sender, body, days_ago, hour, minute=0, reply_to=None):
+            msg = models.ChatMessage(
+                owner_id=edwin.user_id,
+                sender_id=sender.user_id,
+                body=body,
+                reply_to_id=reply_to.message_id if reply_to else None,
+                date=today - timedelta(days=days_ago),
+                time=time(hour, minute),
+            )
+            db.add(msg)
+            db.flush()  # assigns message_id so replies can reference it
+            return msg
+
+        m1 = _msg(edwin, "Good morning everyone. Weekly target is live — let's push the Cold Drinks combo this week.", 6, 9, 12)
+        m2 = _msg(rahim, "Received. Shelf 3 restocked with the combo display, boss.", 6, 9, 41)
+        _msg(karim, "On it. Doing the same for the evening rush.", 6, 10, 5, reply_to=m2)
+        m4 = _msg(nusrat, "Two bulk orders of Soybean Oil 5L today — added to the customer register.", 5, 12, 22)
+        _msg(edwin, "Great — that's the highest-margin item, keep it moving.", 5, 12, 40, reply_to=m4)
+        m6 = _msg(sumi, "Card machine is acting up again at my counter.", 4, 16, 5)
+        _msg(edwin, "Restarted it from the office tablet. Tell me if it repeats.", 4, 16, 20, reply_to=m6)
+        _msg(tanvir, "Noted the new barcode for Mineral Water 1L — scanning fine now.", 3, 11, 15)
+        m9 = _msg(mim, "I'll be away for 3 days starting tomorrow, sir. Family matter.", 3, 19, 30)
+        _msg(edwin, "Take care, Mim. We'll manage the till.", 3, 19, 44, reply_to=m9)
+        m11 = _msg(jahangir, "Going to be 30 min late tomorrow, bus issue.", 2, 20, 45)
+        _msg(edwin, "Okay — Karim covers the opening hour.", 2, 21, 2, reply_to=m11)
+        m13 = _msg(rahim, "Price of Sugar 1kg went up at the distributor. Should we adjust retail?", 1, 10, 5)
+        _msg(edwin, "Hold at 145 for now. I'm comparing suppliers this weekend.", 1, 10, 30, reply_to=m13)
+        _msg(sumi, "Big chocolate order from the school canteen this afternoon!", 1, 15, 40)
+        _msg(edwin, "Excellent — that's the seasonal push working. See you all tomorrow.", 0, 21, 30)
+        db.commit()
+        print(f"  {len(by_name) + 1} participants, 15 messages seeded")
+
+    # -----------------------------------------------------------
+    # Protik assistant history for the owner (grounded Part-B turns)
+    # -----------------------------------------------------------
+    already_assistant = db.query(models.AssistantMessage).filter(
+        models.AssistantMessage.owner_id == edwin.user_id
+    ).count()
+    if force or already_assistant == 0:
+        print("Seeding Protik assistant history…")
+        turns = [
+            ("user", "How did we do today?", None),
+            ("assistant",
+             "Today is tracking strong: ৳18,420 revenue across 46 transactions, up 31% vs the last four Fridays. "
+             "Cold Drink 250ml and Miniket Rice 5kg lead the basket mix, and the evening peak (6-9pm) contributed "
+             "44% of today's revenue.",
+             [{"tool": "get_revenue", "args": {"period": "day"}}]),
+            ("user", "Who is selling the most this week?", None),
+            ("assistant",
+             "Rahim Uddin leads the week with ৳31,200 revenue across 78 transactions, ahead of Nusrat Jahan "
+             "(৳26,850). Sumi Akter is well below her usual pace — her revenue is down roughly 60% against her "
+             "four-week average.",
+             [{"tool": "get_employee_ranking", "args": {"period": "week", "metric": "revenue"}}]),
+            ("user", "Is Ghee 500g selling at all?", None),
+            ("assistant",
+             "No sales of Ghee 500g in the last 14 days while 500 units sit on the shelf — your clearest "
+             "dead-stock item. Consider bundling it with Mustard Oil 1L or giving it a front-shelf spot this week.",
+             [{"tool": "get_dead_stock", "args": {"days": 14}}]),
+        ]
+        now = datetime.utcnow()
+        for i, (role, message, tool_calls) in enumerate(turns):
+            db.add(models.AssistantMessage(
+                owner_id=edwin.user_id,
+                role=role,
+                message=message,
+                tool_calls=tool_calls,
+                created_at=now - timedelta(days=1, minutes=(len(turns) - i) * 7),
+            ))
+        db.commit()
+        print("  6 assistant turns (3 questions, 3 grounded answers)")
+
     print(f"Sales created: {made} across {days} days "
           f"({start.isoformat()} -> {today.isoformat()})")
     print("Done. Log in as edwinzaman / shongkho123 and open Analytics.")
