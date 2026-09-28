@@ -682,15 +682,30 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   min-height: 60px;
 }
-.shell-logo {
+
+/* ---------- Logo ---------- */
+.shk-logo {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  gap: var(--space-2);
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  background: var(--brand-600);
+}
+.shk-logo-bg {
+  fill: var(--brand-600);
+}
+.shk-logo-ring {
+  fill: none;
+  stroke: var(--on-brand);
+  stroke-width: 2.25;
+}
+.shk-logo-name {
+  font-weight: 700;
+  font-size: var(--text-md);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.shell-sidebar .shk-logo-name {
   color: var(--on-brand);
 }
 .shell-sidebar-brand-name {
@@ -709,6 +724,7 @@
   border-radius: var(--radius-sm);
   display: inline-flex;
   margin-left: auto;
+  flex-shrink: 0;
 }
 .shell-sidebar-toggle:hover {
   color: var(--on-brand);
@@ -778,12 +794,23 @@
   white-space: nowrap;
 }
 
-/* collapsed rail: hide labels */
+/* collapsed rail: hide labels; keep the expand toggle visible
+   (it's the ONLY way back out of the rail — do not hide it) */
 .shell-sidebar-collapsed .shell-nav-label,
 .shell-sidebar-collapsed .shell-sidebar-brand-name,
-.shell-sidebar-collapsed .shell-nav-heading,
-.shell-sidebar-collapsed .shell-sidebar-toggle-desktop {
+.shell-sidebar-collapsed .shell-nav-heading {
   display: none;
+}
+.shell-sidebar-collapsed .shell-sidebar-toggle-desktop {
+  opacity: 0.75;
+}
+.shell-sidebar-collapsed .shell-sidebar-brand {
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-inline: var(--space-1);
+}
+.shell-sidebar-collapsed .shell-sidebar-toggle {
+  margin-left: 0;
 }
 .shell-sidebar-collapsed .shell-nav-link {
   justify-content: center;
@@ -956,6 +983,13 @@
   .shell-sidebar-collapsed .shell-nav-link {
     justify-content: flex-start;
     padding: 0 var(--space-3);
+  }
+  .shell-sidebar-collapsed .shell-sidebar-brand {
+    flex-direction: row;
+    padding-inline: var(--space-3);
+  }
+  .shell-sidebar-collapsed .shell-sidebar-toggle {
+    margin-left: auto;
   }
   .shell-sidebar-toggle-desktop {
     display: none;
@@ -1925,3 +1959,18 @@ button.inv-card:focus-visible {
   gap: var(--space-2);
 }
 .ui-table .cell-strong { font-weight: 600; }
+
+/* Brand in the topbar + icon alignment inside card titles */
+.shell-store-name {
+  display: inline-flex;
+  align-items: center;
+}
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.card-title svg {
+  flex-shrink: 0;
+  color: var(--brand-600);
+}

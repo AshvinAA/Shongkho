@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { HandCoins, TriangleAlert } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { RoleGate } from '../components/RoleGate.jsx'
 import Avatar from '../components/Avatar.jsx'
@@ -86,7 +87,7 @@ function OwnerMetrics({ stats }) {
         <div className="card">
           <div className="card-title">Low Stock Alert (≤ {LOW_STOCK_THRESHOLD})</div>
           {stats.lowStock.length === 0 ? (
-            <p className="muted">Everything is well stocked. 🎉</p>
+            <p className="muted">Everything is well stocked.</p>
           ) : (
             <ul className="low-stock-list">
               {stats.lowStock.slice(0, 8).map((p) => (
@@ -118,7 +119,7 @@ function MyCommissionCard({ commission }) {
   if (!commission.active) {
     return (
       <div className="card commission-card">
-        <div className="card-title">💰 My Commission</div>
+        <div className="card-title"><HandCoins size={16} aria-hidden="true" /> My Commission</div>
         <p className="muted m-0">
           No commission policy yet — ask the owner to set one. You keep your
           monthly salary either way.
@@ -128,7 +129,7 @@ function MyCommissionCard({ commission }) {
   }
   return (
     <div className="card commission-card">
-      <div className="card-title">💰 My Commission</div>
+      <div className="card-title"><HandCoins size={16} aria-hidden="true" /> My Commission</div>
       <div className="stat-grid mb-2">
         <div className="card stat-card">
           <div className="stat-label">This month</div>
@@ -162,7 +163,7 @@ function MyWarningsCard({ warnings }) {
   if (!warnings || warnings.length === 0) return null
   return (
     <div className="card warn-card">
-      <div className="card-title">⚠ Warnings on record ({warnings.length})</div>
+      <div className="card-title"><TriangleAlert size={15} aria-hidden="true" /> Warnings on record ({warnings.length})</div>
       <ul className="warn-list">
         {warnings.map((w) => (
           <li key={w.id} className="warn-item">
@@ -284,7 +285,7 @@ function EmployeeMetrics({ stats }) {
         <div className="card">
           <div className="card-title">Low Stock To Watch (≤ {LOW_STOCK_THRESHOLD})</div>
           {stats.lowStock.length === 0 ? (
-            <p className="muted">Shelves are fully stocked. 🎉</p>
+            <p className="muted">Shelves are fully stocked.</p>
           ) : (
             <ul className="low-stock-list">
               {stats.lowStock.slice(0, 8).map((p) => (

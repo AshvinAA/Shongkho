@@ -5,7 +5,7 @@
  *   <Avatar product={{ product_name, photo }} /> — product picture (grid, POS)
  *
  * Shows the image when a photo URL exists, otherwise the first letter of the
- * name (or a 📦 emoji for products) on a colored circle.
+ * name (or the first letter for products) on a colored circle.
  */
 export default function Avatar({ user, product, size = 'md', className = '' }) {
   const name = user?.name || product?.product_name || '?'
@@ -39,7 +39,7 @@ export default function Avatar({ user, product, size = 'md', className = '' }) {
 
   return (
     <span className={classes} title={name} aria-hidden="true">
-      {isProduct ? '📦' : initials || '?'}
+      {isProduct ? initials || '?' : initials || '?'}
     </span>
   )
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { LogOut, Menu, UserRound } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import Avatar from '../Avatar.jsx'
+import Logo from '../Logo.jsx'
 import { Badge } from '../ui/index.jsx'
 
 /**
@@ -42,7 +43,9 @@ export default function Topbar({ onOpenMobileNav }) {
       <button type="button" className="shell-menu-btn" aria-label="Open menu" onClick={onOpenMobileNav}>
         <Menu size={20} />
       </button>
-      <p className="shell-store-name">Shongkho POS</p>
+      <div className="shell-store-name">
+        <Logo size={22} name />
+      </div>
 
       <div className="shell-user" ref={menuRef}>
         <button type="button" className="shell-user-btn" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>

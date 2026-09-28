@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PackageSearch, Pencil, Plus, Search } from 'lucide-react'
+import { Package, PackageSearch, Pencil, Plus, Search } from 'lucide-react'
 import * as productsApi from '../api/products.js'
 import * as uploadsApi from '../api/uploads.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -577,7 +577,9 @@ function PhotoField({ product, file, removed, onChoose, onRemove, disabled }) {
       {previewUrl || serverPhoto ? (
         <img src={previewUrl || serverPhoto} alt="Product preview" className="photo-preview photo-preview-square" />
       ) : (
-        <div className="photo-preview photo-placeholder photo-preview-square">📦</div>
+        <div className="photo-preview photo-placeholder photo-preview-square">
+          <Package size={28} aria-hidden="true" />
+        </div>
       )}
       <div>
         <input

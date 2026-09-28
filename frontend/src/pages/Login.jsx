@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import Logo from '../components/Logo.jsx'
 
 /** Login form (phone + password) with validation and error alerts. */
 export default function Login() {
@@ -61,7 +62,7 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="auth-logo">🏪</span>
+          <Logo size={56} className="auth-logo" />
           <h1>Shongkho POS</h1>
           <p className="muted">Sign in to your store account</p>
         </div>

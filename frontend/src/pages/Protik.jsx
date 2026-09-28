@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Zap } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getDashboard, getRunStatus, startRun } from '../api/analytics.js'
 import { updateMyPreferences } from '../api/auth.js'
@@ -162,7 +163,12 @@ export default function Protik() {
           />
           <Button onClick={handleRun} loading={!!running}>
             {running ? (forceBn ? 'বিশ্লেষণ চলছে…' : 'Analysing…')
-              : (forceBn ? '⚡ বিশ্লেষণ চালান' : '⚡ Run analysis')}
+              : (
+                <>
+                  <Zap size={15} aria-hidden="true" />
+                  {forceBn ? 'বিশ্লেষণ চালান' : 'Run analysis'}
+                </>
+              )}
           </Button>
         </div>
       </div>
@@ -207,7 +213,7 @@ export default function Protik() {
 function InsightsHero({ insights, period, generatedAt, forceBn = false }) {
   const t = forceBn ? {
     empty: 'একটা বিশ্লেষণ চালান, আমি আপনার দোকানের সংকেতগুলো বলে দেব।',
-    emptyHint: `এই ${period === 'day' ? 'দিনের' : period === 'month' ? 'মাসের' : 'সপ্তাহের'} বিশ্লেষণ নেই — উপরে ⚡ Run analysis চাপুন।`,
+    emptyHint: `এই ${period === 'day' ? 'দিনের' : period === 'month' ? 'মাসের' : 'সপ্তাহের'} বিশ্লেষণ নেই — উপরে Run analysis চাপুন।`,
     degraded: (p) => `এই ${p} নির্ভরযোগ্য মন্তব্য লিখতে পারিনি — Analytics ট্যাবের চার্টগুলোই আসল উৎস।`,
     reason: 'কারণ',
     steady: 'আপনার দোকান স্থির — এই সংখ্যাগুলোতে কোনো নাটক নেই।',
@@ -233,7 +239,7 @@ function InsightsHero({ insights, period, generatedAt, forceBn = false }) {
           <p className="muted">{t.emptyHint}</p>
         ) : (
           <p className="muted">
-            No analysis for this {period} yet — hit <strong>⚡ Run analysis</strong> above.
+            No analysis for this {period} yet — hit <strong><Zap size={13} aria-hidden="true" /> Run analysis</strong> above.
           </p>
         )}
       </div>

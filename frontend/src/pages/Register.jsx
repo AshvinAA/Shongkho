@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import * as authApi from '../api/auth.js'
+import Logo from '../components/Logo.jsx'
 
 const initialForm = {
   name: '',
@@ -78,7 +79,7 @@ export default function Register() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="auth-logo">🏪</span>
+          <Logo size={56} className="auth-logo" />
           <h1>Create Account</h1>
           <p className="muted">
             Owners bootstrap the store; employees join with their owner’s ID.

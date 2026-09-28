@@ -11,9 +11,9 @@ import {
   ChartColumn,
   PanelLeftClose,
   PanelLeftOpen,
-  Store,
   X,
 } from 'lucide-react'
+import Logo from '../Logo.jsx'
 
 /**
  * Left sidebar — role-based navigation, collapsible to icon rail, active
@@ -65,14 +65,13 @@ export default function Sidebar({ role, collapsed, onToggleCollapsed, mobileOpen
       {mobileOpen ? <div className="shell-scrim" onClick={onCloseMobile} aria-hidden="true" /> : null}
       <aside className={`shell-sidebar${collapsed ? ' shell-sidebar-collapsed' : ''}${mobileOpen ? ' shell-sidebar-open' : ''}`}>
         <div className="shell-sidebar-brand">
-          <span className="shell-logo" aria-hidden="true">
-            <Store size={18} />
-          </span>
+          <Logo size={26} />
           <span className="shell-sidebar-brand-name">Shongkho</span>
           <button
             type="button"
             className="shell-sidebar-toggle shell-sidebar-toggle-desktop"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
             onClick={onToggleCollapsed}
           >
             {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}

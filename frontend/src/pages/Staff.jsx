@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Pencil, Plus, Trash2, UserRound } from 'lucide-react'
+import { Pencil, Plus, TriangleAlert, Trash2, UserRound, X } from 'lucide-react'
 import * as employeesApi from '../api/employees.js'
 import * as staffApi from '../api/staff.js'
 import * as authApi from '../api/auth.js'
@@ -403,7 +403,7 @@ export default function Staff() {
               onClick={() => setTabTarget(null)}
               aria-label="Close staff panel"
             >
-              ✕ Close
+              <X size={14} aria-hidden="true" /> Close
             </Button>
           </div>
 
@@ -457,7 +457,7 @@ export default function Staff() {
                   Formal warnings are visible to the employee on their own dashboard.
                 </p>
                 <Button variant="danger" size="sm" onClick={() => { setWarnOpen(true); setWarnError(null) }}>
-                  <AlertTriangle size={14} aria-hidden="true" /> Issue Warning
+                  <TriangleAlert size={14} aria-hidden="true" /> Issue Warning
                 </Button>
               </div>
               {warnings.length === 0 ? (

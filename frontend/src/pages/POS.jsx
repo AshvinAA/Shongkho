@@ -158,7 +158,7 @@ export default function POS() {
       if (err.status === 404) {
         setCustomer(null)
         setCustName('')
-        setCustStatus({ kind: 'info', text: 'New customer — enter a name and press "＋" to quick-add.' })
+        setCustStatus({ kind: 'info', text: 'New customer — enter a name, then quick-add with the + button.' })
       } else {
         setCustStatus({ kind: 'error', text: err.message })
       }
