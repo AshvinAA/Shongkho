@@ -1,30 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getDashboard, getRunStatus, startRun } from '../api/analytics.js'
-import { SegmentedControl } from '../components/analytics/common.jsx'
+import { SegmentedControl, Button } from '../components/ui/index.jsx'
+import { fmtMoney } from '../utils/format.js'
+import { chartColor } from '../components/analytics/chartPalette.js'
 import SalesTrend from '../components/analytics/SalesTrend.jsx'
 import EmployeeRace from '../components/analytics/EmployeeRace.jsx'
 import TopProducts from '../components/analytics/TopProducts.jsx'
+import { Skeleton } from '../components/ui/index.jsx'
 
 const PERIOD_OPTIONS = [
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
 ]
-const METRIC_OPTIONS = [
-  { value: 'revenue', label: 'Revenue' },
-  { value: 'profit', label: 'Profit' },
-]
 
 const POLL_MS = 1500
 
 /**
- * Owner-only Analytics page (Track A, stage 1).
+ * Owner-only Analytics page.
  *
- * Loads the latest completed snapshots for the selected period, shows
- * the three sections (sales, employees, products), and offers a
- * "Run analysis" button that starts a run and polls its status
- * (409 = one is already running — just keep polling it).
+ * BI layout: header with run lifecycle + last-analyzed stamp, a four-card
+ * KPI strip (revenue / profit / orders / avg basket, each with delta and
+ * sparkline), then the three snapshot sections. "Run analysis" is the ONE
+ * run trigger (409 = a run is already live — resume polling it).
  *
  * Protik's AI commentary and chat live on their own /protik page.
  */
@@ -113,28 +112,34 @@ export default function Analytics() {
   }
 
   const running = run && (run.status === 'QUEUED' || run.status === 'RUNNING')
+  const runLabel = !run
+    ? 'Run analysis'
+    : running
+      ? run.status === 'QUEUED' ? 'Queued…' : 'Running…'
+      : 'Run analysis'
   const empty = !loading && !sections.sales && !sections.employees && !sections.products
 
   return (
     <div className="page analytics-page">
-      <div className="page-header">
+      <div className="page-header analytics-header">
         <div>
           <h1>Analytics</h1>
-          <p className="muted">
-            Frozen snapshots per run ·{' '}
-            {generatedAt ? `last updated ${new Date(generatedAt).toLocaleString()}` : 'no analysis yet'}
+          <p className="muted analytics-stamp">
+            {generatedAt ? (
+              <>
+                Last analyzed <strong>{new Date(generatedAt).toLocaleString()}</strong>
+              </>
+            ) : (
+              'No analysis yet — snapshots appear after your first run'
+            )}
+            {' · '}frozen per run
           </p>
         </div>
         <div className="analytics-actions">
-          <SegmentedControl options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
-          <button
-            type="button"
-            className="btn"
-            onClick={handleRun}
-            disabled={running}
-          >
-            {running ? `⏳ ${run.status.toLowerCase()}…` : '▶ Run analysis'}
-          </button>
+          <SegmentedControl options={PERIOD_OPTIONS} value={period} onChange={setPeriod} ariaLabel="Analysis period" />
+          <Button onClick={handleRun} loading={!!running}>
+            {runLabel}
+          </Button>
         </div>
         {run?.status === 'FAILED' && (
           <button type="button" className="link-btn" onClick={() => setRun(null)}>
@@ -150,19 +155,26 @@ export default function Analytics() {
         </div>
       )}
 
-      {loading ? (
-        <p className="muted">Loading analytics…</p>
+      {loading && !sections.sales ? (
+        <div className="bi-skeletons" aria-label="Loading analytics">
+          <Skeleton height="96px" />
+          <Skeleton height="320px" />
+          <Skeleton height="320px" />
+          <Skeleton height="320px" />
+        </div>
       ) : (
         <>
+          {sections.sales && <KpiStrip sales={sections.sales} />}
+
           {empty && (
             <div className="alert alert-info analytics-first-run">
-              No analysis for this period yet — hit <strong>▶ Run analysis</strong> (top right) to generate your first snapshot.
+              No analysis for this period yet — hit <strong>Run analysis</strong> (top right) to generate your first snapshot.
             </div>
           )}
 
           <section className="analytics-section">
             {sections.sales ? (
-              <SalesTrend data={sections.sales} metric={metric} />
+              <SalesTrend data={sections.sales} metric={metric} onMetricChange={setMetric} />
             ) : (
               <EmptySection
                 title="Sales trend"
@@ -173,7 +185,7 @@ export default function Analytics() {
 
           <section className="analytics-section">
             {sections.employees ? (
-              <EmployeeRace data={sections.employees} metric={metric} />
+              <EmployeeRace data={sections.employees} metric={metric} onMetricChange={setMetric} />
             ) : (
               <EmptySection title="Employee race" body="How your staff compare on revenue and profit appears after your first run." />
             )}
@@ -186,10 +198,65 @@ export default function Analytics() {
               <EmptySection title="Top products" body="Products ranked by revenue and profit appear after your first run." />
             )}
           </section>
-
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * Four KPI cards derived from the sales snapshot: revenue, profit, orders,
+ * and average basket (revenue ÷ orders, vs the previous period).
+ */
+function KpiStrip({ sales }) {
+  const p = sales.period
+  const cur = sales.current || {}
+  const prev = sales.previous || {}
+  const basketNow = cur.orders ? cur.revenue / cur.orders : 0
+  const basketPrev = prev.orders ? prev.revenue / prev.orders : 0
+  const basketDelta = basketPrev ? (basketNow / basketPrev - 1) * 100 : null
+
+  const cards = [
+    { label: `Revenue this ${p}`, value: fmtMoney(cur.revenue), delta: sales.change_pct?.revenue, tone: 'revenue', detail: `prev ${fmtMoney(prev.revenue)}`, series: sales.series?.map((b) => b.revenue) },
+    { label: `Profit this ${p}`, value: fmtMoney(cur.profit), delta: sales.change_pct?.profit, tone: 'profit', detail: `prev ${fmtMoney(prev.profit)}`, series: sales.series?.map((b) => b.profit) },
+    { label: `Orders this ${p}`, value: String(cur.orders ?? 0), delta: sales.change_pct?.orders, tone: 'orders', detail: `prev ${prev.orders ?? 0}`, series: sales.series?.map((b) => b.orders) },
+    { label: 'Avg basket', value: fmtMoney(basketNow), delta: basketDelta === null ? null : Math.round(basketDelta * 10) / 10, detail: `prev ${fmtMoney(basketPrev)}`, series: null },
+  ]
+
+  return (
+    <div className="bi-kpi-strip">
+      {cards.map((c) => (
+        <div key={c.label} className={`ui-stat ui-stat-${c.tone}`}>
+          <span className="ui-stat-label">{c.label}</span>
+          <span className="ui-stat-value">{c.value}</span>
+          {c.delta !== undefined && c.delta !== null ? (
+            <span className={`ui-delta ${c.delta > 0 ? 'ui-delta-up' : c.delta < 0 ? 'ui-delta-down' : 'ui-delta-neutral'}`}>
+              {c.delta > 0 ? '▲' : c.delta < 0 ? '▼' : '▬'} {Math.abs(c.delta)}%
+            </span>
+          ) : null}
+          {c.series?.length > 1 && <Spark points={c.series} stroke={chartColor(c.tone)} />}
+          {c.detail ? <span className="ui-stat-detail">{c.detail}</span> : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Tiny inline sparkline (pure SVG — no Recharts overhead at KPI size). */
+function Spark({ points, stroke }) {
+  const w = 120
+  const h = 28
+  const max = Math.max(...points, 1)
+  const min = Math.min(...points, 0)
+  const span = max - min || 1
+  const step = w / (points.length - 1)
+  const d = points
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(h - 3 - ((v - min) / span) * (h - 6)).toFixed(1)}`)
+    .join(' ')
+  return (
+    <svg className="bi-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <path d={d} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" />
+    </svg>
   )
 }
 

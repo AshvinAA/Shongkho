@@ -8,6 +8,7 @@ import { ArrowDown, ArrowUp, ArrowDownUp } from 'lucide-react'
  *               width?, render?(row) }]
  *   rows:    array of objects
  *   getRowKey(row) — stable React key
+ *   rowClassName(row, index) — optional extra class per body row
  *   sortable (default true) — click header to sort; managed internally
  *   dense — tighter rows
  *   empty — rendered in tbody when rows is empty
@@ -15,7 +16,16 @@ import { ArrowDown, ArrowUp, ArrowDownUp } from 'lucide-react'
  * Sticky header, 1px row rules, right-aligned tabular numerics for
  * align="right" columns.
  */
-export default function DataTable({ columns, rows, getRowKey, sortable = true, dense = false, empty = null, className = '' }) {
+export default function DataTable({
+  columns,
+  rows,
+  getRowKey,
+  rowClassName,
+  sortable = true,
+  dense = false,
+  empty = null,
+  className = '',
+}) {
   const [sort, setSort] = useState(null) // { key, dir: 'asc' | 'desc' }
 
   const sortedRows = useMemo(() => {
@@ -74,8 +84,11 @@ export default function DataTable({ columns, rows, getRowKey, sortable = true, d
               <td colSpan={columns.length}>{empty}</td>
             </tr>
           ) : (
-            sortedRows.map((row) => (
-              <tr key={getRowKey ? getRowKey(row) : row.id ?? row.key ?? JSON.stringify(row)}>
+            sortedRows.map((row, idx) => (
+              <tr
+                key={getRowKey ? getRowKey(row) : row.id ?? row.key ?? JSON.stringify(row)}
+                className={rowClassName ? rowClassName(row, idx) : undefined}
+              >
                 {columns.map((col) => (
                   <td key={col.key} className={col.align === 'right' ? 'ui-td-right' : col.align === 'center' ? 'ui-td-center' : ''}>
                     {col.render ? col.render(row) : row[col.key]}

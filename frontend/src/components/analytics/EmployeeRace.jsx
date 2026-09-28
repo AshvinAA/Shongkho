@@ -1,29 +1,35 @@
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, LabelList, ReferenceDot, Legend,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend, ReferenceDot,
 } from 'recharts'
 import { fmtMoney } from '../../utils/format.js'
-import { DeltaChip } from './common.jsx'
+import { DeltaChip, SegmentedControl } from './common.jsx'
 import { chartColor, chartSeries } from './chartPalette.js'
 import Avatar from '../Avatar.jsx'
 
 const AXIS_TICK = { fontSize: 11, fill: 'var(--chart-axis, #5c6f68)' }
 
+const METRIC_OPTIONS = [
+  { value: 'revenue', label: 'Revenue' },
+  { value: 'profit', label: 'Profit' },
+]
+
 /**
  * Employee race — Track A "employees" snapshot.
  *
- * Two visualizations from one frozen snapshot:
+ * Two views from one frozen snapshot:
  *   1. Race over time (line chart): cumulative revenue/profit per
- *      employee across the period's buckets — avatars drift apart as
- *      the period progresses. Driven by `race_series` (string employee
- *      ids -> cumulative arrays aligned with `labels`).
- *   2. The bar race (kept from stage 1): final standings, per-person
- *      delta chips, hover tooltip with full context.
+ *      employee across the period's buckets, avatar headmarkers at each
+ *      line's end. Driven by `race_series` (employee ids -> cumulative
+ *      arrays aligned with `labels`).
+ *   2. Final standings: ranked rows — rank number, avatar, name,
+ *      metric-colored bar, value, delta chip — plus both money figures
+ *      and the per-person delta, always visible.
  *
- * metric switches BOTH charts between revenue and profit with no
- * refetch — both series ship inside the snapshot.
+ * The metric toggle is lifted to the page; both views follow it with no
+ * refetch (both series ship inside the snapshot).
  */
-export default function EmployeeRace({ data, metric = 'revenue' }) {
+export default function EmployeeRace({ data, metric = 'revenue', onMetricChange }) {
   if (!data?.employees) return null
 
   const lanes = data.employees
@@ -31,9 +37,9 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
     .sort((a, b) => b.value - a.value)
   const leader = lanes[0]
   const rs = data.race_series
+  const maxVal = Math.max(...lanes.map((l) => l.value), 1)
 
   // ---- race-over-time chart data ----
-  // rows: [{ label, [id]: cumulativeValue, ... }, ...]
   let raceRows = []
   let racers = []
   if (rs?.labels?.length && rs[metric]) {
@@ -63,9 +69,18 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
     <div className="analytics-panel">
       <div className="analytics-panel-head">
         <h3 className="card-title">Employee race — {metric}</h3>
-        <span className="race-leader-chip">
-          🏁 Leader: <strong>{leader?.name ?? '—'}</strong>
-        </span>
+        <div className="analytics-panel-controls">
+          <span className="race-leader-chip">
+            🏁 Leader: <strong>{leader?.name ?? '—'}</strong>
+          </span>
+          <SegmentedControl
+            options={METRIC_OPTIONS}
+            value={metric}
+            onChange={onMetricChange}
+            ariaLabel="Race metric"
+            size="sm"
+          />
+        </div>
       </div>
 
       {lanes.length === 0 ? (
@@ -93,7 +108,7 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
                       <div className="race-line-legend">
                         {racers.map((r, i) => (
                           <span key={r.id} className="race-line-legend-item">
-                            <span className="race-swatch" style={{ background: colorOf(i) }} />
+                            <span className="race-swatch" style={{ background: chartSeries(i) }} />
                             <Avatar user={{ name: r.lane.name, photo: r.lane.photo }} size="xs" />
                             {r.lane.name}
                           </span>
@@ -106,14 +121,14 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
                       key={r.id}
                       type="monotone"
                       dataKey={r.id}
-                      stroke={colorOf(i)}
+                      stroke={chartSeries(i)}
                       strokeWidth={2}
                       dot={false}
                       isAnimationActive={false}
                     />
                   ))}
                   {/* Avatar headmarkers at each line's final point. */}
-                  {racers.map((r, i) => {
+                  {racers.map((r) => {
                     const last = raceRows[raceRows.length - 1]
                     if (!last) return null
                     return (
@@ -128,64 +143,33 @@ export default function EmployeeRace({ data, metric = 'revenue' }) {
             </div>
           )}
 
-          <div className="chart-wrap" style={{ marginTop: '0.75rem' }}>
+          <div className="race-standings">
             <h4 className="race-subtitle">Final standings</h4>
-            <ResponsiveContainer width="100%" height={Math.max(150, lanes.length * 52)}>
-              <BarChart data={lanes} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartColor('grid')} horizontal={false} />
-                <XAxis type="number" tick={AXIS_TICK} tickFormatter={(v) => fmtMoney(v)} stroke={chartColor('grid')} />
-                <YAxis type="category" dataKey="name" width={110}
-                  tick={{ fontSize: 12, fill: 'var(--chart-axis, #5c6f68)' }} stroke={chartColor('grid')} />
-                <Tooltip
-                  formatter={(v) => fmtMoney(v)}
-                  content={({ payload }) => {
-                    if (!payload?.length) return null
-                    const e = payload[0].payload
-                    return (
-                      <div className="race-tooltip">
-                        <Avatar user={{ name: e.name, photo: e.photo }} size="xs" />
-                        <strong>{e.name}</strong>
-                        <div>{e.orders} order{e.orders === 1 ? '' : 's'} this {data.period}</div>
-                        <div>Revenue {fmtMoney(e.revenue)} <DeltaChip value={e.change_pct?.revenue} /></div>
-                        <div>Profit {fmtMoney(e.profit)} <DeltaChip value={e.change_pct?.profit} /></div>
-                      </div>
-                    )
-                  }}
-                />
-                {/* The bar wears the metric's semantic color: teal revenue,
-                    green profit — same meaning as the headline stat. */}
-                <Bar dataKey="value" fill={chartColor(metric)} radius={[0, 6, 6, 0]} barSize={24}>
-                  <LabelList dataKey="value" position="right" formatter={(v) => fmtMoney(v)} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <ol className="race-rows">
+              {lanes.map((e, i) => (
+                <li key={e.employee_id} className={`race-row${i === 0 ? ' race-row-leader' : ''}`}>
+                  <span className={`race-rank race-rank-${i + 1}`}>{i + 1}</span>
+                  <Avatar user={{ name: e.name, photo: e.photo }} size="sm" />
+                  <span className="race-row-name">{e.name}</span>
+                  <span className="race-row-bar" aria-hidden="true">
+                    <span
+                      className="race-row-fill"
+                      style={{ width: `${Math.max(4, (e.value / maxVal) * 100)}%`, background: chartColor(metric) }}
+                    />
+                  </span>
+                  <span className="race-row-value">{fmtMoney(e.value)}</span>
+                  <span className="race-standing-figures">
+                    <span>Rev <strong>{fmtMoney(e.revenue)}</strong> · Profit <strong>{fmtMoney(e.profit)}</strong></span>
+                  </span>
+                  <DeltaChip value={e.change_pct?.[metric]} label={`vs last ${data.period}`} />
+                </li>
+              ))}
+            </ol>
           </div>
-
-          <ul className="race-legend">
-            {lanes.map((e) => (
-              <li key={e.employee_id}>
-                <Avatar user={{ name: e.name, photo: e.photo }} size="sm" />
-                <strong>{e.name}</strong>
-                <span className="muted">{e.orders} order{e.orders === 1 ? '' : 's'}</span>
-                {/* Final standings show BOTH figures — the bar chart above
-                    switches with the metric toggle, these never hide. */}
-                <span className="race-standing-figures">
-                  <span>Rev <strong>{fmtMoney(e.revenue)}</strong></span>
-                  <span className="muted">·</span>
-                  <span>Profit <strong>{fmtMoney(e.profit)}</strong></span>
-                </span>
-                <DeltaChip value={e.change_pct?.[metric]} label={`vs last ${data.period}`} />
-              </li>
-            ))}
-          </ul>
         </>
       )}
     </div>
   )
-}
-
-function colorOf(i) {
-  return chartSeries(i)
 }
 
 /**

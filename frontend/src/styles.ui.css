@@ -1382,3 +1382,182 @@
     max-height: none;
   }
 }
+
+/* ============================================================
+   Phase 4 — Analytics BI layer
+   ============================================================ */
+.analytics-header .analytics-stamp {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+.bi-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.bi-spark {
+  display: block;
+}
+.bi-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+@media (max-width: 1024px) {
+  .bi-kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .bi-kpi-strip {
+    grid-template-columns: 1fr;
+  }
+}
+.analytics-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.best-list-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.best-list-bars li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.best-bar-track {
+  display: block;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.best-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+.best-fig {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.best-fig-sub {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.race-standings {
+  margin-top: var(--space-4);
+}
+.race-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.race-row {
+  display: grid;
+  grid-template-columns: 28px auto minmax(90px, 180px) minmax(60px, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+.race-row:last-child {
+  border-bottom: none;
+}
+.race-row-leader {
+  background: var(--brand-50);
+  border-radius: var(--radius-sm);
+}
+.race-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.race-rank-1 {
+  background: var(--brand-600);
+  color: #fff;
+}
+.race-row-name {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.race-row-bar {
+  display: block;
+  height: 10px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.race-row-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+.race-row-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.race-standing-figures {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ui-table .ui-row-top1 td {
+  background: var(--brand-50);
+}
+.tp-name {
+  font-weight: 600;
+}
+.tp-value-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  width: 100%;
+}
+.tp-bar-track {
+  width: 72px;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.tp-bar {
+  display: inline-block;
+  height: 100%;
+  border-radius: 999px;
+}
+@media (max-width: 1024px) {
+  .race-row {
+    grid-template-columns: 28px auto minmax(60px, 1fr) auto auto;
+  }
+  .race-row-bar,
+  .race-standing-figures {
+    display: none;
+  }
+}
