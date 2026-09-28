@@ -36,6 +36,20 @@ for _var in list(os.environ):
                 "LLM_BUDGET_SECONDS", "OLLAMA_URL"):
         del os.environ[_var]
 
+# --- Database isolation -----------------------------------------------
+# backend/.env now points TIDB_DATABASE_URL at TiDB Cloud. Tests must
+# never open connections or run init_db() DDL against it: pin a throwaway
+# SQLite URL via SQLALCHEMY_DATABASE_URL (env beats .env in
+# database.get_database_url) BEFORE importing the app. The app's own
+# engine is only used by init_db() during TestClient startup — requests
+# always go through the per-test SQLite override below.
+import tempfile  # noqa: E402
+
+_TEST_SCHEMA_DB = os.path.join(tempfile.gettempdir(), "shongkho_pytest_schema.db")
+if os.path.exists(_TEST_SCHEMA_DB):
+    os.remove(_TEST_SCHEMA_DB)
+os.environ["SQLALCHEMY_DATABASE_URL"] = "sqlite:///" + _TEST_SCHEMA_DB.replace(os.sep, "/")
+
 
 @pytest.fixture()
 def db_engine(tmp_path):

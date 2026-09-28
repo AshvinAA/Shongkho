@@ -75,13 +75,29 @@ def get_engine():
 
     pool_pre_ping / pool_recycle matter for cloud databases (TiDB) where
     idle connections are dropped silently; they are harmless for SQLite.
+
+    MySQL/TiDB URLs get mandatory TLS (TiDB Cloud only accepts secure
+    connections, verified against the system CA bundle — certifi when
+    available) and utf8mb4 so Bangla text and emoji survive end to end.
     """
     global _engine
     if _engine is None:
+        url = get_database_url()
+        connect_args = {}
+        if url.startswith("mysql"):
+            ssl_options = {"ssl_verify_cert": True, "ssl_verify_identity": True}
+            try:
+                import certifi
+
+                ssl_options["ca"] = certifi.where()
+            except ImportError:  # fall back to the system trust store
+                pass
+            connect_args = {"charset": "utf8mb4", "ssl": ssl_options}
         _engine = create_engine(
-            get_database_url(),
+            url,
             pool_pre_ping=True,
             pool_recycle=3600,
+            connect_args=connect_args,
         )
     return _engine
 
