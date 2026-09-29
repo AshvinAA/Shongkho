@@ -33,6 +33,7 @@ const OWNER_SECTIONS = [
       { to: '/sales', label: 'Sales', icon: Receipt },
       { to: '/customers', label: 'Customers', icon: Users },
       { to: '/staff', label: 'Staff', icon: UserCog },
+      { to: '/chat', label: 'Chat', icon: MessageCircle },
     ],
   },
   {

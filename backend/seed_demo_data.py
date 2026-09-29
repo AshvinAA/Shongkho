@@ -311,11 +311,102 @@ def _ensure_user(db, *, name, phone, role, password, position=None,
     return user, True
 
 
-def seed(force: bool = False) -> None:
+def _seed_chat_messages(db, edwin, employees, force: bool = False) -> None:
+    """Seed the store group chat with a realistic team conversation.
+
+    Safe to call repeatedly: skips when the owner already has chat
+    messages unless force=True. `employees` is the list of Employee rows
+    working for `edwin`.
+    """
+    already_chatted = db.query(models.ChatMessage).filter(
+        models.ChatMessage.owner_id == edwin.user_id
+    ).count()
+    if not force and already_chatted > 0:
+        print(f"Group chat already has {already_chatted} messages — skipping (force to reseed).")
+        return
+    if force and already_chatted > 0:
+        # Chat-only reseeds (and --force) start from a clean slate so old
+        # messages don't survive alongside the new conversation.
+        deleted = db.query(models.ChatMessage).filter(
+            models.ChatMessage.owner_id == edwin.user_id
+        ).delete()
+        db.commit()
+        print(f"Cleared {deleted} old chat message(s).")
+
+    by_name = {u.name: u for u in employees}
+    missing = [n for n in ("Rahim Uddin", "Karim Ahmed", "Sumi Akter", "Tanvir Hasan",
+                           "Nusrat Jahan", "Jahangir Alam", "Mim Rahman") if n not in by_name]
+    if missing:
+        print(f"Group chat: missing employees {missing} — run a full seed first.")
+        return
+    rahim = by_name["Rahim Uddin"]
+    karim = by_name["Karim Ahmed"]
+    sumi = by_name["Sumi Akter"]
+    tanvir = by_name["Tanvir Hasan"]
+    nusrat = by_name["Nusrat Jahan"]
+    jahangir = by_name["Jahangir Alam"]
+    mim = by_name["Mim Rahman"]
+
+    today = date.today()
+    now = datetime.now()
+
+    def _msg(sender, body, days_ago, hour, minute=0, reply_to=None):
+        d = today - timedelta(days=days_ago)
+        t = time(hour, minute)
+        if days_ago == 0 and datetime.combine(d, t) > now:
+            # never stamp a "today" message in the future
+            t = (now - timedelta(minutes=5)).time()
+        msg = models.ChatMessage(
+            owner_id=edwin.user_id,
+            sender_id=sender.user_id,
+            body=body,
+            reply_to_id=reply_to.message_id if reply_to else None,
+            date=d,
+            time=t,
+        )
+        db.add(msg)
+        db.flush()  # assigns message_id so replies can reference it
+        return msg
+
+    print("Seeding group chat…")
+    # A Dhaka shop team talks the way they talk: Bangla + Banglish mixed.
+    m1 = _msg(edwin, "Good morning everyone. Weekly target is live — let's push the Cold Drinks combo this week.", 5, 9, 12)
+    m2 = _msg(rahim, "সালাম boss 🙏 Combo display Shelf 3-তে লাগিয়ে দিছি।", 5, 9, 41)
+    _msg(karim, "Vai, আমি এখন warehouse থেকে আরো 2 crate আনতেছি।", 5, 10, 5, reply_to=m2)
+    m4 = _msg(nusrat, "Soybean Oil 5L-এর দুইটা bulk order hoye gelo — register-এ add kore disi.", 4, 12, 22)
+    _msg(edwin, "Great — that's the highest-margin item, keep it moving. 🙌", 4, 12, 40, reply_to=m4)
+    m6 = _msg(sumi, "Sir, আমার counter-এর card machine আবার কাজ করতেছে না।", 3, 16, 5)
+    _msg(edwin, "Office tablet থেকে restart দিছি. আবার হলে জানাও।", 3, 16, 20, reply_to=m6)
+    _msg(tanvir, "Mineral Water 1L-এর নতুন barcode scan করছে — সব ঠিক আছে।", 2, 11, 15)
+    m9 = _msg(mim, "Sir, পরশুকে থেকে ৩ দিন ছুটি লাগবে… বাড়িতে একটা জরুরি কাজ আছে। 🙏", 2, 19, 30)
+    _msg(edwin, "Take care, Mim. টিল ম্যানেজ করবো। ফিরে এসে কথা বলি।", 2, 19, 44, reply_to=m9)
+    m11 = _msg(jahangir, "Bus-এর সমস্যা — কাল ৩০ মিনিট লেট হইতে পারি।", 1, 20, 45)
+    _msg(edwin, "Okay — Karim covers the opening hour.", 1, 21, 2, reply_to=m11)
+    m13 = _msg(rahim, "Distributor-এর কাছে Sugar 1kg-এর দাম বাড়ছে। Retail বাড়াবো?", 0, 10, 5)
+    _msg(edwin, "Hold at 145 for now. Weekend-এ supplier দেখবো।", 0, 10, 30, reply_to=m13)
+    m15 = _msg(sumi, "School canteen থেকে chocolate-এর বড় order এসেছে আজ! 🎉", 0, 15, 40)
+    _msg(edwin, "Excellent — that's the seasonal push working. সবাইকে ধন্যবাদ, কাল দেখা হবে।", 0, 21, 30)
+    db.commit()
+    print(f"  {len(by_name) + 1} participants, 16 messages seeded")
+
+
+def seed(force: bool = False, chat_only: bool = False) -> None:
     init_db()
     engine = get_engine()
     Session = get_session_factory()
     db = Session()
+
+    if chat_only:
+        # Refresh just the group chat; users, products and sales untouched.
+        owner = db.query(models.User).filter(models.User.phone_number == "01711111100").first()
+        if owner is None or owner.user_type != "owner":
+            print("Owner 01711111100 not found — run a full seed first.")
+            db.close()
+            return
+        employees = db.query(models.Employee).filter(models.Employee.employer_id == owner.user_id).all()
+        _seed_chat_messages(db, owner, employees, force=True)
+        db.close()
+        return
 
     owner_row = db.query(models.User).filter(models.User.phone_number == "01711111100").first()
 
@@ -346,9 +437,6 @@ def seed(force: bool = False) -> None:
         db.query(models.User).delete()
         db.commit()
 
-    # -----------------------------------------------------------
-    # People
-    # -----------------------------------------------------------
     # -----------------------------------------------------------
     # People (+ portrait photos where the download succeeded)
     # -----------------------------------------------------------
@@ -522,51 +610,7 @@ def seed(force: bool = False) -> None:
     # -----------------------------------------------------------
     # Group chat: a realistic team conversation (backdated)
     # -----------------------------------------------------------
-    already_chatted = db.query(models.ChatMessage).filter(
-        models.ChatMessage.owner_id == edwin.user_id
-    ).count()
-    if force or already_chatted == 0:
-        print("Seeding group chat…")
-        by_name = {emp.name: emp for emp, _ in staff}
-        rahim = by_name["Rahim Uddin"]
-        karim = by_name["Karim Ahmed"]
-        sumi = by_name["Sumi Akter"]
-        tanvir = by_name["Tanvir Hasan"]
-        nusrat = by_name["Nusrat Jahan"]
-        jahangir = by_name["Jahangir Alam"]
-        mim = by_name["Mim Rahman"]
-
-        def _msg(sender, body, days_ago, hour, minute=0, reply_to=None):
-            msg = models.ChatMessage(
-                owner_id=edwin.user_id,
-                sender_id=sender.user_id,
-                body=body,
-                reply_to_id=reply_to.message_id if reply_to else None,
-                date=today - timedelta(days=days_ago),
-                time=time(hour, minute),
-            )
-            db.add(msg)
-            db.flush()  # assigns message_id so replies can reference it
-            return msg
-
-        m1 = _msg(edwin, "Good morning everyone. Weekly target is live — let's push the Cold Drinks combo this week.", 6, 9, 12)
-        m2 = _msg(rahim, "Received. Shelf 3 restocked with the combo display, boss.", 6, 9, 41)
-        _msg(karim, "On it. Doing the same for the evening rush.", 6, 10, 5, reply_to=m2)
-        m4 = _msg(nusrat, "Two bulk orders of Soybean Oil 5L today — added to the customer register.", 5, 12, 22)
-        _msg(edwin, "Great — that's the highest-margin item, keep it moving.", 5, 12, 40, reply_to=m4)
-        m6 = _msg(sumi, "Card machine is acting up again at my counter.", 4, 16, 5)
-        _msg(edwin, "Restarted it from the office tablet. Tell me if it repeats.", 4, 16, 20, reply_to=m6)
-        _msg(tanvir, "Noted the new barcode for Mineral Water 1L — scanning fine now.", 3, 11, 15)
-        m9 = _msg(mim, "I'll be away for 3 days starting tomorrow, sir. Family matter.", 3, 19, 30)
-        _msg(edwin, "Take care, Mim. We'll manage the till.", 3, 19, 44, reply_to=m9)
-        m11 = _msg(jahangir, "Going to be 30 min late tomorrow, bus issue.", 2, 20, 45)
-        _msg(edwin, "Okay — Karim covers the opening hour.", 2, 21, 2, reply_to=m11)
-        m13 = _msg(rahim, "Price of Sugar 1kg went up at the distributor. Should we adjust retail?", 1, 10, 5)
-        _msg(edwin, "Hold at 145 for now. I'm comparing suppliers this weekend.", 1, 10, 30, reply_to=m13)
-        _msg(sumi, "Big chocolate order from the school canteen this afternoon!", 1, 15, 40)
-        _msg(edwin, "Excellent — that's the seasonal push working. See you all tomorrow.", 0, 21, 30)
-        db.commit()
-        print(f"  {len(by_name) + 1} participants, 15 messages seeded")
+    _seed_chat_messages(db, edwin, [emp for emp, _ in staff], force=force)
 
     # -----------------------------------------------------------
     # Protik assistant history for the owner (grounded Part-B turns)
@@ -622,5 +666,7 @@ def seed(force: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed demo data for Shongkho analytics")
     parser.add_argument("--force", action="store_true", help="wipe existing data and reseed")
+    parser.add_argument("--chat-only", action="store_true",
+                        help="only (re)seed the group chat — keeps users, products and sales")
     args = parser.parse_args()
-    seed(force=args.force)
+    seed(force=args.force, chat_only=args.chat_only)
