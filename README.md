@@ -12,8 +12,7 @@
 # Shongkho (সংখ্যা)
 
 > **Numbers for the shop you run in your head.**
-> A point-of-sale system with a built-in analytics engine and an AI advisor
-> that answers only from your store's real data.
+> A commissioned-based point-of-sale system with an AI advisor, built for small Bangladeshi retail stores.
 
 ![Tests](https://img.shields.io/badge/tests-300%20backend%20%C2%B7%2046%20frontend%20passing-2EA043)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
