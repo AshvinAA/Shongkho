@@ -43,7 +43,7 @@ grounded in the actual database.
 Generative analysis: Protik summarizing what's happening in the store right now.
 
 <p align="center">
-  <img src="docs/screenshots/generative-analysis.png" alt="Protik's generative analysis — a grounded summary of the store" width="85%" />
+  <img src="docs/screenshots/generative-analysis.png" alt="Protik's generative analysis — a grounded summary of the store" width="60%" />
 </p>
 
 Bilingual by design — the same advisor in English and in Bangla (mode: auto | বাংলা | EN):
