@@ -8,6 +8,21 @@ if (!Element.prototype.scrollIntoView) {
 }
 
 /**
+ * IntersectionObserver polyfill for jsdom — used by the Analytics page's
+ * floating period bubble. A no-op observe (never fires) keeps the bubble
+ * hidden in tests that don't drive it explicitly.
+ */
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  class IntersectionObserver {
+    constructor() {}
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.IntersectionObserver = IntersectionObserver
+}
+
+/**
  * ResizeObserver polyfill for jsdom — required by Recharts'
  * ResponsiveContainer (and most chart libraries). jsdom has no layout
  * engine, so a no-op that immediately "observes" is all we need.

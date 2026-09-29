@@ -8,7 +8,7 @@
  * lists, run lifecycle states, and period switching.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('../api/analytics.js', () => ({
@@ -154,6 +154,53 @@ describe('Analytics page — period switching', () => {
 
     await waitFor(() => {
       expect(analyticsApi.getDashboard).toHaveBeenLastCalledWith('month')
+    })
+  })
+})
+
+describe('Analytics page — floating period bubble', () => {
+  /** Controllable IntersectionObserver: tests fire the callback manually. */
+  class MockIO {
+    static all = []
+    constructor(cb) { this.cb = cb; MockIO.all.push(this) }
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  }
+
+  afterEach(() => {
+    MockIO.all = []
+    vi.unstubAllGlobals()
+  })
+
+  it('surfaces the bubble when the header scrolls away, hides it on scroll back', async () => {
+    vi.stubGlobal('IntersectionObserver', MockIO)
+    const user = userEvent.setup()
+    mockDashboard({ sales: SALES_SNAPSHOT })
+    renderAnalytics()
+    await screen.findByText('Revenue this week')
+
+    // Header control visible: exactly one period tablist on screen.
+    expect(screen.getAllByRole('tablist', { name: 'Analysis period' })).toHaveLength(1)
+
+    // Header scrolled out of view -> the floating bubble appears.
+    act(() => { MockIO.all[0].cb([{ isIntersecting: false }]) })
+    await waitFor(() => {
+      expect(screen.getAllByRole('tablist', { name: 'Analysis period' })).toHaveLength(2)
+    })
+
+    // Switching period FROM THE BUBBLE refetches the dashboard.
+    mockDashboard({ sales: { ...SALES_SNAPSHOT, period: 'month' } })
+    const bubbleTabs = screen.getAllByRole('tab', { name: 'Month' })
+    await user.click(bubbleTabs[bubbleTabs.length - 1])
+    await waitFor(() => {
+      expect(analyticsApi.getDashboard).toHaveBeenLastCalledWith('month')
+    })
+
+    // Scrolling back to the top hides the bubble again.
+    act(() => { MockIO.all[0].cb([{ isIntersecting: true }]) })
+    await waitFor(() => {
+      expect(screen.getAllByRole('tablist', { name: 'Analysis period' })).toHaveLength(1)
     })
   })
 })

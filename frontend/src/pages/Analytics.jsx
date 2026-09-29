@@ -26,6 +26,8 @@ const POLL_MS = 1500
  * run trigger (409 = a run is already live — resume polling it).
  *
  * Protik's AI commentary and chat live on their own /protik page.
+ * A floating Day/Week/Month bubble follows scroll, so the period stays
+ * switchable without scrolling back up to the header.
  */
 export default function Analytics() {
   const { user } = useAuth()
@@ -62,6 +64,26 @@ export default function Analytics() {
 
   // Cleanup the poller on unmount.
   useEffect(() => () => clearInterval(pollRef.current), [])
+
+  // Floating period bubble: watch the header controls with an
+  // IntersectionObserver; once they scroll out of view (behind the sticky
+  // topbar), surface a Day/Week/Month bubble in the corner so switching
+  // periods never requires scrolling back to the top.
+  const [controlsOffscreen, setControlsOffscreen] = useState(false)
+  const controlsSentinelRef = useRef(null)
+
+  useEffect(() => {
+    const el = controlsSentinelRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined
+    const observer = new IntersectionObserver(
+      ([entry]) => setControlsOffscreen(!entry.isIntersecting),
+      // Discount the sticky topbar (60px) so the bubble appears only when
+      // the header controls are actually hidden behind it.
+      { rootMargin: '-60px 0px 0px 0px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   function pollRun(runId) {
     clearInterval(pollRef.current)
@@ -135,7 +157,7 @@ export default function Analytics() {
             {' · '}frozen per run
           </p>
         </div>
-        <div className="analytics-actions">
+        <div className="analytics-actions" ref={controlsSentinelRef}>
           <SegmentedControl options={PERIOD_OPTIONS} value={period} onChange={setPeriod} ariaLabel="Analysis period" />
           <Button onClick={handleRun} loading={!!running}>
             {runLabel}
@@ -200,6 +222,21 @@ export default function Analytics() {
           </section>
         </>
       )}
+
+      {/* Floating Day/Week/Month bubble — its control only mounts while the
+          header controls are scrolled away, so there is never a duplicate
+          tablist on screen (or in the accessibility tree). */}
+      <div className={`analytics-period-bubble${controlsOffscreen ? ' analytics-period-bubble-on' : ''}`}>
+        {controlsOffscreen && (
+          <SegmentedControl
+            options={PERIOD_OPTIONS}
+            value={period}
+            onChange={setPeriod}
+            ariaLabel="Analysis period"
+            size="sm"
+          />
+        )}
+      </div>
     </div>
   )
 }

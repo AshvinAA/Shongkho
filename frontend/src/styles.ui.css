@@ -1989,3 +1989,49 @@ button.inv-card:focus-visible {
 .advisor-spark-mark {
   vertical-align: -2px;
 }
+
+/* ---------- Analytics floating period bubble ----------
+   Follows scroll on the Analytics page: once the header Day/Week/Month
+   control scrolls behind the sticky topbar, this bubble fades in near
+   the bottom corner so the period stays switchable from anywhere on the
+   page. Hidden state is visibility+transform (not display) so the
+   appear transition can run. */
+.analytics-period-bubble {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 700; /* below the sticky topbar (800) and mobile sidebar */
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.18s ease-out,
+    transform 0.18s ease-out,
+    visibility 0s linear 0.18s;
+}
+.analytics-period-bubble-on {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.18s ease-out,
+    transform 0.18s ease-out,
+    visibility 0s;
+}
+.analytics-period-bubble .ui-segmented {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+@media (max-width: 900px) {
+  .analytics-period-bubble {
+    right: var(--space-3);
+    bottom: var(--space-3);
+    max-width: calc(100vw - 2 * var(--space-3));
+  }
+}
