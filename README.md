@@ -12,7 +12,7 @@
 # Shongkho (সংখ্যা)
 
 > **Numbers for the shop you run in your head.**
-> A point-of-sale system with an AI advisor, built for small Bangladeshi retail stores.
+> A commissioned-based point-of-sale system with an AI advisor, built for small Bangladeshi retail stores.
 
 ![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white)
