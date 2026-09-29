@@ -9,7 +9,7 @@
 </p>
 ====================================================================== -->
 
-# Shongkho (সংখ্যা)
+# Shongkho 
 
 > **Numbers for the shop you run in your head.**
 > A commissioned-based point-of-sale system with an AI advisor, built for small Bangladeshi retail stores.
