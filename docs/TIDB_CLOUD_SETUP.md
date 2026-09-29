@@ -1,15 +1,14 @@
 # TiDB Cloud Serverless — setup & operations
 
-Shongkho's backend now runs on **TiDB Cloud Serverless** (MySQL-compatible),
-region `ap-southeast-1` (Singapore). Committed in `db: move Shongkho backend
-to TiDB Cloud Serverless`.
+Shongkho's backend runs on **TiDB Cloud Serverless** (MySQL-compatible),
+region `ap-southeast-1` (Singapore).
 
 ## What changed in code
 
 | File | Change |
 |---|---|
 | `backend/database.py` | `mysql+pymysql://` URLs now get **mandatory TLS** (cert-verification via `certifi`) and `charset=utf8mb4` through `connect_args`. TiDB Cloud refuses plain connections; SQLite behavior is untouched. |
-| `backend/tests/conftest.py` | Pins `SQLALCHEMY_DATABASE_URL` to a throwaway SQLite file **before importing the app**, so the 272-test suite never touches the cloud cluster. (Previously the suite silently inherited whatever `backend/.env` pointed at — that was the real reason the tests "worked" on SQLite.) |
+| `backend/tests/conftest.py` | Pins `SQLALCHEMY_DATABASE_URL` to a throwaway SQLite file **before importing the app**, so the test suite never touches the cloud cluster. |
 
 ## Connection
 
@@ -37,8 +36,6 @@ TIDB_PASSWORD=<password>
   `assistant_messages`, `chat_messages`, `analysis_runs`,
   `analytics_snapshots`) are created by `init_db()` via `create_all` on
   startup — no manual DDL needed.
-- Local dev data (29,677 rows: 11,269 sales / 18,354 sale_items / 24 products)
-  was migrated from `backend/Shongkho_test.db` with verified counts.
 
 ## Operations
 
@@ -52,7 +49,7 @@ TIDB_PASSWORD=<password>
 
 - The cluster root password lives only in the gitignored `backend/.env`.
   Rotate it in the TiDB Cloud console if it was ever shared.
-- Consider a least-privilege SQL user for the app instead of the org root
-  user (`3RR...root` is a cluster-level login).
+- Prefer a least-privilege SQL user for the app over the cluster root
+  login.
 - Serverless free-tier connection limits are modest; the engine's
   `pool_pre_ping` + `pool_recycle=3600` handle idle-connection drops.

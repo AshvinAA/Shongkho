@@ -9,7 +9,7 @@
 </p>
 ====================================================================== -->
 
-# Shongkho (সংখ্যা)
+# Shongkho 
 
 > **Numbers for the shop you run in your head.**
 > A commissioned-based point-of-sale system with an AI advisor, built for small Bangladeshi retail stores.
@@ -29,7 +29,7 @@ Which item sells fastest on Fridays, which employee actually moves stock, what's
 gathering dust on the shelf: it's all in their head, or in a worn notebook. When
 nothing is written down, nothing can be compared, questioned, or improved.
 
-**Shongkho** (Bengali for "numbers") writes it down automatically at the point of
+**Shongkho** writes it down automatically at the point of
 sale — fast checkout (cash/bKash/card), live inventory, per-employee logins so every
 sale carries a name, and a WhatsApp-style group chat for the whole store. Then it does
 the two things a notebook never could: turns the raw sales into a **one-click analytics
@@ -53,7 +53,7 @@ Bilingual by design — the same advisor in English and in Bangla (mode: auto | 
   <img src="docs/screenshots/protik-bangla.png" alt="Protik answering in Bangla" width="49%" />
 </p>
 
-### Analytics — day / week / month, one click
+### Analytics — day / week / month
 
 Sales trend, the employee race, and top products — each frozen per analysis run.
 
@@ -61,6 +61,18 @@ Sales trend, the employee race, and top products — each frozen per analysis ru
   <img src="docs/screenshots/analytics-sales.png" alt="Sales analytics — trend, KPIs, deltas" width="32.5%" />
   <img src="docs/screenshots/analytics-employees.png" alt="Employee analytics — staff performance race" width="32.5%" />
   <img src="docs/screenshots/analytics-products.png" alt="Product analytics — top products by revenue and profit" width="32.5%" />
+</p>
+
+###  Project demo
+
+<!-- Demo video: LinkedIn post (activity 7510806750086750208).
+     GitHub can't embed LinkedIn videos inline, so this is a click-through badge.
+     -->
+
+<p align="center">
+  <a href="https://www.linkedin.com/feed/update/urn:li:activity:7510806750086750208/">
+    <img src="https://img.shields.io/badge/WATCH_THE_FULL_DEMO-LinkedIn-0A66C2?logo=linkedin&logoColor=white&style=for-the-badge" alt="Watch the full demo on LinkedIn" />
+  </a>
 </p>
 
 ---
@@ -145,7 +157,7 @@ against the live provider with deterministic per-answer verdicts — **22/22 PAS
 fabricated-number leakage (**0**), tool-selection accuracy (100%), and
 over-refusal (0) across 13 scenario families.
 
-### Bangla, natively
+### Bilingual 
 
 Language mode is `auto | বাংলা | EN` — `auto` mirrors whatever the owner writes.
 It's translation-at-the-model (native bilingual generation), never an MT layer, so

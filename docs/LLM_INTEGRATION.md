@@ -441,10 +441,9 @@ at any depth":
    chips ask advice questions.
 10. **Part B routing v2 (live-driven, llama3.2 tuning).** The chat
    prompt is an ordered QUESTION-ASKER (Q1 conversation → Q2 store
-   data → Q3 refuse), because option-framing swings 3B behavior
-   wildly: a refuse-first ordering made it a refuse-bot (in-scope
-   questions refused), a tool-first "default" made it fetch on
-   "how are you". Each observed failure shape got a WRONG/RIGHT
+   data → Q3 refuse), because option-framing swings 3B behavior   wildly: a refuse-first ordering made it refuse too often (in-scope
+    questions refused), a tool-first "default" made it fetch on
+    "how are you". Each observed failure shape got a WRONG/RIGHT
    example pair — examples outperform rules on llama by a wide
    margin, but the final-answer example must contain NO copyable
    numbers/names (it was quoted verbatim into real answers; the
@@ -455,7 +454,7 @@ at any depth":
    corrective narration retry now branches on failure shape (has
    data → "quote verbatim, never compute"; no data + number-free →
    "plain words, no digits"; no data + numbers → "call the tool
-   first"), and a no-data double-fail ships a friendly canned line
+   first"), and a no-data double-fail ships a friendly fixed line
    (co-pilot pitch for conversation asks, honest "couldn't pull the
    numbers" for data asks — `conversation_double_fail` in meta).
    Refuse-after-fetching gets one corrective retry, then the fixed
@@ -466,20 +465,18 @@ at any depth":
    the gate). Guardrails NEVER shipped an ungrounded number across
    all live eval runs.
 11. **Part B auto-fetch rescue (the 3B ceiling, engineered around).**
-   Live runs showed llama sometimes WILL NOT issue the tool call for
+   Live runs showed llama sometimes does not issue the tool call for
    a data question no matter how the corrective retry is worded —
    the loop then double-failed into the honest fallback. Since the
    loop knows the question, the fetch is now deterministic: after a
    no-data narration double-fail on a question matching
    (question-word + time-word), the loop calls the obvious tool
-   ITSELF (`_auto_tool_for`: employee keyword or a literal employee
+   itself (`_auto_tool_for`: employee keyword or a literal employee
    name → get_employee_performance scoped to that name; otherwise
    get_sales_metrics; args always complete) and gives the model one
    more round to narrate REAL data. One auto-fetch per turn,
-   cap-bounded, telemetry `meta.auto_fetch`. This turned the worst
-   failure mode ("How much has Rahim sold today?" → dead fallback)
-   into a correct grounded answer. Conversation asks still degrade
-   to the canned   co-pilot line when llama digits its chit-chat —
+   cap-bounded, telemetry `meta.auto_fetch`. This turned the worst    failure mode ("How much has Rahim sold today?" → honest fallback)
+    into a correct grounded answer. Conversation asks still degrade    to the fixed   co-pilot line when llama slips digits into chit-chat —
    acceptable; the line IS the designed answer for capabilities
    questions. Auto-fetch hints are conservative; both guidance
    examples (fire-an-employee pushback) and rescue routing degrade
@@ -514,8 +511,8 @@ at any depth":
    the whole rescue ladder (auto-fetch, refuse-retry, synthesis)
    exists to compensate for 3B tool-discipline, and Gemini makes
    most of it redundant while keeping it as a safety net.
-14. **Part B specificity gate (the vague-answer loophole).** External
-   review (Claude) flagged a real hole, verified against the code: the
+14. **Part B specificity gate (the vague-answer loophole).** A design
+   review flagged a real hole, verified against the code: the
    reality gate only checks numbers-if-present, and the relevance gate
    explicitly passes number-free prose — so a lay-off question answered
    with entity-free hedging ("the trailing seller", "the gap is
@@ -543,14 +540,14 @@ at any depth":
      mid-sentence — "…the best-selling product, the"), and the prompt
      gains a rule: employee/product answers must NAME entities from
      tool_results, never "the trailing seller".
-   Review's rejected suggestions, for the record: pre-emptive fetching
+   Two suggestions were considered and declined: pre-emptive fetching
    before the model decides (the refuse-rescue + auto-fetch already
    cover misfires without changing loop economics) and a free-text
    topical-relevance check on number-free advice (unverifiable without
    an LLM judge; named-entity requirement is the deterministic
    approximation). Vague-answer risk remains on unclassified (domain
-   None) questions by design — gating every conversational reply for
-   named entities would turn the advisor back into a refuse-bot.
+   None) questions by design — gating every conversational reply for    named entities would turn the advisor back into a refusals-first
+    assistant.
 15. **Live-turn forensics: four failure shapes from one session, and
    the fixes.** The persisted assistant_messages table makes every
    live failure auditable (`tool_calls` args + message + telemetry).
@@ -575,8 +572,7 @@ at any depth":
       classified question auto-fetches immediately (misfire
       forensics: wrong-tool ValueErrors and placeholder-copied args
       both end in refusals; waiting wastes a full 30–90s round).
-      Unclassified questions keep the clean-refusal path — a chatbot
-      that can never say "I don't know" is a refuse-bot.
+      Unclassified questions keep the clean-refusal path — a chatbot       that can never say "I don't know" is a refusals-first assistant.
    c) **Final with NO fetch on a classified question** (the user's
       reported turn: "which product should we be marketing more" →
       an answer that named no product and called no tool). The gates
@@ -589,7 +585,7 @@ at any depth":
       This adopts (for classified questions only) the "force the tool
       call" suggestion earlier rejected in item 14 — the live session
       proved vague-answer risk extends past the specificity gate.
-   d) **Single-lane synthesis nonsense** — with a one-person employee
+   d) **Single-lane synthesis wording** — with a one-person employee
       payload (scoped by an example-copied name), the ranking template
       produced "Karim Ahmed leads your staff with 25335.0 … Karim
       Ahmed trails at 25335.0". Fix: when the lanes collapse to one
@@ -715,8 +711,8 @@ findings, all addressed:
     redirect ships whatever the loop did. Regression-tested.
  3. **Example-copy guard in the chat prompt**: "the phrasing in these
     examples is off-limits for answers" added to Q1 (Gemini verbatim-
-    copied the capabilities example; the echo shield caught it, but
-    the retry is only useful if the model knows copying is the crime).
+    copied the capabilities example; the echo shield caught it, but     the retry is only useful if the model knows example text is
+     off-limits for answers).
 
 Post-fix eval deltas: conversation_answered 50% → 100% (capabilities
 answers in its own words), prediction ships the redirect, no
@@ -765,7 +761,7 @@ present, else the English snapshot with an honest `missing_language:
 exact-match table post-loop — only DETERMINISTIC text is localized,
 never model prose. `_synth_answer` grows parallel Bangla templates
 (numbers verbatim → checker-safe). A Bangla echo-shield variant
-(`_ECHO_PHRASE_BN_RE`) guards the Bangla canned lines.
+(`_ECHO_PHRASE_BN_RE`) guards the Bangla fixed lines.
 
 **Shields go bilingual.** `_CONVERSATION_ASK_RE`, `_PREDICTION_RE`,
 `_WORLD_KNOWLEDGE_RE`, and `_DOMAIN_HINTS` gain Bangla-script and

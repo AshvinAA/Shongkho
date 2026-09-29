@@ -1,9 +1,10 @@
-# Analytics Setup (Track A — Stage 1)
+# Analytics Setup
 
 How the "Run Analysis" pipeline works, and how to run it locally.
-Stage 1 covers the deterministic half: **sales graph, employee race,
-top products**. No LLM is involved yet (stage 2 adds insights, stage 3
-the assistant).
+All three stages are live today: the deterministic core (**sales trend,
+employee race, top products**), the LLM insight engine (stage 2), and
+the Protik assistant (stage 3). Only the optional stage-4 scale infra
+remains future work — see [Implementation status](#implementation-status).
 
 ## Architecture in one paragraph
 
@@ -95,7 +96,8 @@ cp backend/.env.example backend/.env
 # set TIDB_DATABASE_URL (TiDB/MySQL in prod, or sqlite:///./Shongkho_dev.db for dev)
 ```
 
-`GEMINI_API_KEY` can stay empty — stage 1 never calls an LLM.
+`GEMINI_API_KEY` can stay empty — the run still completes; the
+insight section degrades to deterministic, number-checked summaries.
 
 ### 3. Run the stack
 
@@ -178,10 +180,10 @@ What you get:
 | Edwin Zaman (owner) | `01711111100` | `shongkho123` |
 | Rahim Uddin, Karim Ahmed, Sumi Akter, Tanvir Hasan, Nusrat Jahan, Jahangir Alam, Mim Rahman (employees) | `01711111101`…`07` | `shongkho123` |
 
-Plus 12 products, 13 customers, and ~3,600 sales across ~4 months
-ending today. Employees get SVG initial-avatars seeded into
-`users.photo`, so the race chart, staff page, and navbar all show
-them. Storyline baked in: Rahim leads, Sumi has a visible slump this
+Plus 24 products (with real photos), 13 customers, and ~11,000 sales
+across ~8 months ending today. Employees get portrait photos (with
+SVG-initial fallbacks) seeded into `users.photo`, so the race chart,
+staff page, and navbar all show them. Storyline baked in: Rahim leads, Sumi has a visible slump this
 week, cold drinks trend up in hot months.
 
 After seeding, open Analytics as Edwin and hit **▶ Run analysis** for
@@ -190,8 +192,8 @@ each period you want to view.
 ## Tests
 
 ```bash
-cd backend && python -m pytest tests/test_analytics.py -q      # 24 tests
-cd frontend && npx vitest run src/test/Analytics.test.jsx      # 6 tests
+cd backend && python -m pytest tests/test_analytics.py -q      # 31 tests
+cd frontend && npx vitest run src/test/Analytics.test.jsx      # 7 tests
 ```
 
 The backend suite runs **without Redis or Celery installed**: the
@@ -199,15 +201,18 @@ route's executor dependency (`get_enqueue`) is overridden with a
 synchronous executor in tests — the same seam production swaps for the
 Celery chord.
 
-## Roadmap
+## Implementation status
 
-- **Stage 2 — Insight engine:** `analytics/insights.py` calls Gemini in
-  JSON mode with the aggregated DTO; validates returned `claims` against
-  the DTO; falls back to a safe string on mismatch. Writes the real
-  `insights` snapshot (the placeholder row is already in place).
-- **Stage 3 — Business assistant:** `analytics/tools.py` (closed tool
+- ✅ **Stage 1 — Deterministic pipeline:** aggregators, snapshot rows,
+  sync + celery executors, dashboard API.
+- ✅ **Stage 2 — Insight engine:** `analytics/insights.py` calls the LLM
+  in JSON mode over the aggregated DTO; every returned claim is checked
+  against the data (basis citations) and falls back to a deterministic
+  summary on any mismatch.
+- ✅ **Stage 3 — Business assistant:** `analytics/tools.py` (closed tool
   registry, owner scope injected from the session) + `/analytics/chat`
-  + `assistant_messages` table + daily cap.
-- **Stage 4 — Scale infra:** Celery beat watchdog
-  (`pipeline.mark_stale_runs_failed` — already implemented, just wire
-  the schedule), snapshot pruning, optional SSE instead of polling.
+  + `assistant_messages` table + daily cap. See
+  [chatbot.md](../chatbot.md) and [LLM_INTEGRATION.md](LLM_INTEGRATION.md).
+- ◻ **Stage 4 — Scale infra (optional):** the stale-run watchdog
+  (`pipeline.mark_stale_runs_failed`) is implemented but not yet
+  scheduled; snapshot pruning and SSE-instead-of-polling are open.

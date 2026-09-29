@@ -165,8 +165,8 @@ deterministically. In order, from cheapest to most drastic:
    failure carries Google's own retry hint. A short window
    (≤ `RATE_LIMIT_MAX_WAIT_S`) is slept out and the SAME round retried
    once (`meta.rate_limit_waited`); a longer window degrades
-   immediately to the honest fallback — holding the owner's click
-   hostage for a minute is worse UX than an honest retry-now card.
+   immediately to the honest fallback — making the owner wait a
+   minute for a reply is worse UX than an honest retry-now card.
    Local providers are never rate-limited, so their errors carry no
    hint and this rung never fires on Ollama.
 
@@ -190,10 +190,8 @@ deterministically. In order, from cheapest to most drastic:
    fetched data is a misfire (the model was told to answer with the
    results). One corrective retry; a second refusal ships the fixed
    `REFUSAL_AFTER_DATA_FALLBACK` (the model's own refusal text was
-   observed echoing the corrective error verbatim — untrustworthy).
-3. **Auto-fetch rescue (`_auto_tool_for` + `_auto_fetch`).** When the
-   model WILL NOT call the tool for a data question — or refuses one
-   — the loop fetches the obvious tool ITSELF: employee keyword or a
+   observed echoing the corrective error verbatim — untrustworthy).3. **Auto-fetch rescue (`_auto_tool_for` + `_auto_fetch`).** When the
+   model does not call the tool for a data question — or refuses one — the loop fetches the obvious tool itself: employee keyword or a
    literal employee name → `get_employee_performance` (scoped to that
    name only when the user typed it); product domain →
    `get_top_products(metric=revenue, limit=5)`; otherwise
@@ -275,8 +273,7 @@ Hard-won lessons, each paid for with live failures:
 - **Examples outperform rules by a wide margin.** Every observed
   failure shape got a WRONG/RIGHT example pair (describe-without-
   fetching, computed numbers, refusing in-scope).
-- **Option-framing swings behavior wildly.** A refuse-first ordering
-  made it a refuse-bot (refusing in-scope questions); a tool-first
+- **Option-framing swings behavior wildly.** A refuse-first ordering   made it refuse too often (refusing in-scope questions); a tool-first
   "default" made it fetch on "how are you". The Q1/Q2/Q3 order
   balances both.
 - **Final-answer examples must carry NO copyable numerals.** The
@@ -314,20 +311,13 @@ mid-sentence — "…the best-selling product, the").
 | Provider | `LLM_PROVIDER=gemini`, `GEMINI_API_KEY=…`, `LLM_MODEL=gemini-3.5-flash-lite` (dev switched 2026-09-27; free-tier limits are per model — flash-lite 15/min, flash tiers 5/min) | backend/.env |
 | Language mode | `owners.assistant_language` = `auto \| bn \| en` (owner-persisted); per-turn override via the chat request's `language` field — `PUT /auth/me/preferences` | models.py, routes/auth.py, routes/analytics.py |
 
-Dev currently runs on Gemini; the Ollama row of history remains
-one env edit away (`LLM_PROVIDER=ollama`, `LLM_MODEL=llama3.2`) — the
-pipeline is provider-agnostic (`generate_json` / `chat_decide`
-contract, schema-forced output both ways). Two provider-neutral
-tightenings shipped with the switch (§17 of docs/LLM_INTEGRATION.md):
-schema enums on `action`/`tool`/`metric` (Gemini's responseSchema
-otherwise free-texts tool names), and date-arg inference in
-`_sanitize_tool_args` (the optional-args schema otherwise lets Gemini
-emit `args: {}` and burn rounds on ValueErrors).
-
-Switching to Gemini is an env change only — `LLM_PROVIDER=gemini`,
-`GEMINI_API_KEY=…`, `LLM_MODEL=gemini-3.5-flash-lite` — no code changes;
-the whole pipeline is provider-agnostic (`generate_json` /
-`chat_decide` contract, schema-forced output both ways).
+Dev currently runs on Gemini; switching providers is an env change only —
+`LLM_PROVIDER` + `GEMINI_API_KEY` (or `LLM_PROVIDER=ollama` for a local,
+free setup) + `LLM_MODEL` — no code changes. The pipeline is
+provider-agnostic (`generate_json` / `chat_decide` contract, schema-forced
+output both ways), with schema enums on `action`/`tool`/`metric` and
+date-arg inference in `_sanitize_tool_args` shipped provider-neutral so
+both back ends behave identically (§17 of docs/LLM_INTEGRATION.md).
 
 ## 10. Evaluation
 
@@ -335,12 +325,12 @@ the whole pipeline is provider-agnostic (`generate_json` /
 deterministic store (Owner + Rahim + Karim + 2 products + labeled
 sales), runs the REAL loop against the configured provider, and
 scores model **behavior** against labeled expectations — no free-text
-scoring, no LLM judge. 12 scenarios across kinds: `data` (sales_today,
+scoring, no LLM judge. 13 scenarios across kinds: `data` (sales_today,
 employee_perf, top_products, most_sold, employee_named, sales_range,
 multi-part employee_vs_product), `conversation` (smalltalk,
 capabilities — must answer warmly, NOT refuse), `out_of_scope`
 (world_knowledge, prediction, off_topic). Each scenario is history-
-isolated (`fresh=True` wipes its conversation — a poisoned history
+isolated (`fresh=True` wipes its conversation — a leftover history
 would contaminate every later measurement).
 
 Note: `eval_assistant.py` must not `load_dotenv` at import (it is
@@ -400,7 +390,9 @@ PYTHONUTF8=1 python basic_questions_battery.py --gap 8 --only q17,q18,q19,q20,q2
   calls, byte-identical echoed answers on unrelated questions, and a
   one-person "leads … trails" synthesis — see
   `docs/LLM_INTEGRATION.md` §11 item 15 for the turn-by-turn
-  forensics.## 11. Tests
+  forensics.
+
+## 11. Tests
 
 Backend suite (`cd backend && python -m pytest tests/ -p no:warnings -q`,
 300 passing) covers, chatbot-relevant:
@@ -421,9 +413,10 @@ Backend suite (`cd backend && python -m pytest tests/ -p no:warnings -q`,
 - `tests/test_analytics.py` — tools, pipeline (incl. stale-run
   reaping), aggregators.
 
-Frontend (`cd frontend && npx vitest run`, 41 passing) covers the
-text-only assistant panel, API client, and the Protik language switch
-(`ProtikLanguage.test.jsx`).
+Frontend (`cd frontend && npx vitest run`, 46 passing) covers the
+text-only assistant panel, API client, the Protik language switch
+(`ProtikLanguage.test.jsx`), and the shell/sidebar navigation
+(`Sidebar.test.jsx`).
 
 ## 12. File map
 

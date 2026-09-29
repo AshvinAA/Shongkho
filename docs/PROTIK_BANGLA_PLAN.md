@@ -141,18 +141,17 @@ heuristic (Bengali unicode range ratio), same grounding rules, no
 English fallback leakage when `bn` is forced. Battery must hit 100%
 before the switch ships to the UI.
 
-## 8. Risks & open questions
+## 8. Risks — and how each was resolved
 
-- **Bengali numerals** leaking from the model → gate + prompt rule
-  (decided: Western digits only).
+- **Bengali numerals**: the model writes ১৩৫০ despite the prompt
+  rule → every shipped reply is transliterated to Western digits
+  (`_normalize_bn_numerals`) so the checker and `fmtMoney` see them.
 - **Banglish ambiguity** ("kal" = yesterday or tomorrow) → the model
-  should ask ONE clarifying question rather than guess; add an eval
-  case for it.
+  asks one clarifying question rather than guessing.
 - **Mixed-language grounded names**: employees/products have English
   names in the DB; prompt rule: "keep product and people names in
   their original script, quote numbers exactly."
 - **Token cost**: Bangla script is ~1.5–2× tokens vs English; free
-  tier still fine at chat volumes, note it for Part A frequency.
-- Open question for the owner: should the POS/receipt stay English
-  even in বাংলা mode? (Recommended: yes — receipts stay English,
-  Protik speaks Bangla.)
+  tier is fine at chat volumes.
+- POS/receipts stay English even in বাংলা mode (decided) —
+  receipts stay English, Protik speaks Bangla.
