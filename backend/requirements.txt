@@ -4,6 +4,7 @@ uvicorn[standard]
 sqlalchemy
 pymysql          # TiDB/MySQL driver
 cryptography     # required by pymysql for SSL
+certifi          # CA bundle for the TLS pinning in database.py
 python-dotenv
 pydantic
 bcrypt           # password hashing

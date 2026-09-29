@@ -1,0 +1,40 @@
+# Shongkho — full stack in Docker.
+#
+#   cp backend/.env.example backend/.env   (fill in TiDB + Gemini values)
+#   docker compose up --build
+#   → app:      http://localhost:8080
+#   → API docs: http://localhost:8080/api/v1/docs
+#
+# The database is TiDB CLOUD SERVERLESS (remote, MySQL wire protocol over
+# TLS) — deliberately no database container: one source of truth for the
+# demo store, no local data directories to manage.
+#
+# TiDB Serverless enforces TLS; backend/database.py already attaches
+# certifi-verified SSL + utf8mb4 for every mysql+pymysql:// URL, so the
+# containers need no certs or extra config.
+
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - backend/.env          # TIDB_DATABASE_URL, GEMINI_API_KEY, …
+    environment:
+      # Session cookie signing key — override in backend/.env if you like.
+      SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:-change-me-in-production}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"             # the only published port
+    depends_on:
+      backend:
+        condition: service_healthy

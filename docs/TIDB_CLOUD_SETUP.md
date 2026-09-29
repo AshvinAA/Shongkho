@@ -10,7 +10,6 @@ to TiDB Cloud Serverless`.
 |---|---|
 | `backend/database.py` | `mysql+pymysql://` URLs now get **mandatory TLS** (cert-verification via `certifi`) and `charset=utf8mb4` through `connect_args`. TiDB Cloud refuses plain connections; SQLite behavior is untouched. |
 | `backend/tests/conftest.py` | Pins `SQLALCHEMY_DATABASE_URL` to a throwaway SQLite file **before importing the app**, so the 272-test suite never touches the cloud cluster. (Previously the suite silently inherited whatever `backend/.env` pointed at — that was the real reason the tests "worked" on SQLite.) |
-| `backend/migrate_sqlite_to_tidb.py` | One-shot data migration: schema-reflecting, idempotent (clears target tables first), prints sqlite→TiDB row-count verification. |
 
 ## Connection
 
@@ -47,8 +46,6 @@ TIDB_PASSWORD=<password>
   Startup runs `init_db()` (idempotent `create_all` + light migrations).
 - **Re-seed demo data**: `python seed_demo_data.py --force` from `backend/`
   now seeds TiDB directly (it uses `get_engine()`).
-- **Re-run migration** (e.g. after new local data): `python
-  migrate_sqlite_to_tidb.py` — clears TiDB tables first, then copies.
 - **Run tests**: unchanged — `python -m pytest tests/`. Hermetic, SQLite-only.
 
 ## Security notes

@@ -1,0 +1,12 @@
+# Keep the build context lean and secrets out of the image
+.env
+.env.*
+__pycache__/
+**/__pycache__/
+*.pyc
+tests/
+.pytest_cache/
+Shongkho_test.db
+*.db
+Dockerfile
+.dockerignore

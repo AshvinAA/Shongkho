@@ -1,0 +1,5 @@
+# Never bake dev junk into the SPA build
+node_modules/
+dist/
+coverage/
+.vite/

@@ -39,4 +39,4 @@ Thumbs.db
 .idea/
 
 backend/.env
-backend/.env.example 
+backend/.env.example
